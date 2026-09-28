@@ -37,7 +37,9 @@ import { MultiWorkerCheckInModal } from '../components/MultiWorkerCheckInModal';
 import { DoubleBlindReviewModal } from '../components/DoubleBlindReviewModal';
 import { LateCancellationModal, CancellationModalMode } from '../components/LateCancellationModal';
 import { BlockchainProofModal } from '../components/BlockchainProofModal';
+import { VerifiedIdentityBadge } from '../components/VerifiedIdentityBadge';
 import { offlineCacheManager } from '../utils/offlineCache';
+import { triggerHaptic } from '../utils/haptics';
 
 interface GigDetailScreenProps {
   gigId: string;
@@ -56,6 +58,7 @@ export const GigDetailScreen: React.FC<GigDetailScreenProps> = ({
     rawGigs,
     currentGigBids,
     currentUser,
+    users,
     roleMode,
     toggleRoleMode,
     startVoipCall,
@@ -108,6 +111,7 @@ export const GigDetailScreen: React.FC<GigDetailScreenProps> = ({
     : 0;
 
   const handleStartVoip = () => {
+    triggerHaptic('medium');
     startVoipCall(
       isClient ? (gig.freelancerName || 'Freelancer Nhận Kèo') : gig.clientName,
       isClient ? 'Người Làm' : 'Người Thuê',
@@ -117,8 +121,10 @@ export const GigDetailScreen: React.FC<GigDetailScreenProps> = ({
 
   const handlePlaceBidSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    triggerHaptic('medium');
     const success = placeBid(gig.id, bidPrice, bidMinutes, bidNote);
     if (success) {
+      triggerHaptic('success');
       setShowBidModal(false);
     }
   };
@@ -128,7 +134,10 @@ export const GigDetailScreen: React.FC<GigDetailScreenProps> = ({
       {/* Top bar */}
       <div className="flex items-center justify-between">
         <button
-          onClick={onBack}
+          onClick={() => {
+            triggerHaptic('light');
+            onBack();
+          }}
           className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-[#12233B] hover:bg-[#162C4E] border border-[#C5E5EC]/25 text-[#C5E5EC] text-xs font-bold transition shadow-sm active:scale-95 cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4" />
@@ -232,6 +241,52 @@ export const GigDetailScreen: React.FC<GigDetailScreenProps> = ({
 
         {/* Title & Description */}
         <h1 className="text-xl font-extrabold text-white leading-snug">{gig.title}</h1>
+        
+        {/* Client / Poster Info Card with Verified Identity Badge */}
+        <div className="flex items-center justify-between p-3 rounded-2xl bg-[#12233B]/80 border border-[#C5E5EC]/20">
+          <div className="flex items-center space-x-3 min-w-0">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-[#3064AE] to-[#417AC6] text-white font-extrabold flex items-center justify-center text-sm shadow shrink-0">
+              {(gig.clientName || 'K').charAt(0).toUpperCase()}
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center space-x-2 flex-wrap gap-y-1">
+                <span className="font-extrabold text-sm text-white truncate">{gig.clientName}</span>
+                {(() => {
+                  const poster = users?.find((u) => u.id === gig.clientId);
+                  const isCccd = poster?.isNfcVerified || gig.clientTier === 'CCCD_VERIFIED' || gig.clientTier === 'PRO';
+                  const isStudent = poster?.isStudentVerified || poster?.isEduVerified || gig.clientTier === 'STUDENT';
+                  const school = poster?.studentSchool || '';
+
+                  if (isCccd || isStudent) {
+                    return (
+                      <VerifiedIdentityBadge
+                        isCccdVerified={isCccd}
+                        isStudentVerified={isStudent}
+                        school={school}
+                        size="sm"
+                        showText={true}
+                      />
+                    );
+                  }
+                  return (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-[#3064AE]/30 text-[#C5E5EC] border border-[#C5E5EC]/30">
+                      {USER_TIERS[gig.clientTier]?.badgeText || 'Người Dùng'}
+                    </span>
+                  );
+                })()}
+              </div>
+              <p className="text-[11px] text-[#C5E5EC]/70">Người đăng việc • Bảo chứng Escrow 100%</p>
+            </div>
+          </div>
+
+          <button
+            onClick={onOpenChat}
+            className="px-3 py-1.5 rounded-xl bg-[#3064AE]/30 hover:bg-[#3064AE]/50 border border-[#C5E5EC]/30 text-[#C5E5EC] hover:text-white font-bold text-xs transition active:scale-95 shrink-0 cursor-pointer"
+          >
+            Nhắn Tin
+          </button>
+        </div>
+
         <p className="text-xs text-[#C5E5EC]/90 leading-relaxed whitespace-pre-line">{gig.description}</p>
 
         {/* Location & Metrics Info */}
@@ -300,6 +355,7 @@ export const GigDetailScreen: React.FC<GigDetailScreenProps> = ({
                 <button
                   id="open-bid-modal-btn"
                   onClick={() => {
+                    triggerHaptic('medium');
                     if (isNewbie) {
                       onOpenVerify();
                     } else {
@@ -316,8 +372,10 @@ export const GigDetailScreen: React.FC<GigDetailScreenProps> = ({
                   id="direct-accept-gig-btn"
                   onClick={() => {
                     if (isNewbie) {
+                      triggerHaptic('medium');
                       onOpenVerify();
                     } else {
+                      triggerHaptic('success');
                       acceptGigDirectly(gig);
                     }
                   }}
@@ -333,7 +391,10 @@ export const GigDetailScreen: React.FC<GigDetailScreenProps> = ({
           {gig.status !== 'OPEN' && gig.status !== 'CANCELLED' && (
             <div className="flex flex-wrap items-center gap-2">
               <button
-                onClick={onOpenChat}
+                onClick={() => {
+                  triggerHaptic('light');
+                  onOpenChat();
+                }}
                 className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#3064AE] to-[#417AC6] text-white font-extrabold text-xs hover:brightness-110 shadow-md transition flex items-center space-x-1.5 border border-[#C5E5EC]/30 cursor-pointer"
               >
                 <MessageSquare className="w-4 h-4 text-[#C5E5EC]" />

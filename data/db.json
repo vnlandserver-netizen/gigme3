@@ -1,7 +1,7 @@
 {
   "users": [
     {
-      "id": "admin_root",
+      "id": "000000000",
       "name": "Ban Quản Trị GigMe",
       "email": "admin@admin.vn",
       "phone": "0909120918",
@@ -37,7 +37,7 @@
       "onTimeRate": 100,
       "postedGigsCount": 10,
       "totalSpent": 0,
-      "walletBalance": 10000000,
+      "walletBalance": 10370000,
       "escrowLockedBalance": 0,
       "securityPin": "123456",
       "badges": "Quản Trị Viên Tối Cao",
@@ -100,7 +100,7 @@
       "locationName": "KTX Bách Khoa B7, Hai Bà Trưng, Hà Nội",
       "latitude": 21.0053,
       "longitude": 105.8433,
-      "clientId": "admin_root",
+      "clientId": "000000000",
       "clientName": "Ban Quản Trị GigMe",
       "clientTier": "VERIFIED",
       "freelancerId": null,
@@ -134,7 +134,7 @@
       "locationName": "KTX ĐHQG Khu B, Dĩ An / TP.Thủ Đức (TP.HCM)",
       "latitude": 10.8808,
       "longitude": 106.7825,
-      "clientId": "admin_root",
+      "clientId": "000000000",
       "clientName": "Ban Quản Trị GigMe",
       "clientTier": "VERIFIED",
       "freelancerId": null,
@@ -168,7 +168,7 @@
       "locationName": "🌐 Online / Remote (Toàn quốc Bắc - Nam)",
       "latitude": 16.0471,
       "longitude": 108.2068,
-      "clientId": "admin_root",
+      "clientId": "000000000",
       "clientName": "Lê Duy (Freelance Online)",
       "clientTier": "PRO",
       "freelancerId": null,
@@ -196,6 +196,54 @@
   "marketplace": [],
   "transactions": [
     {
+      "id": "tx_wh_TEST_1790517363196",
+      "userId": "000000000",
+      "type": "VIETQR_DEPOSIT",
+      "amount": 200000,
+      "title": "Nạp tiền SelfHostedBot (Mô Phỏng) Tự Động (Real Webhook)",
+      "subtitle": "MBBank • Khớp lệnh tức thì 24/7",
+      "bankInfo": "TEST_1790517363196",
+      "note": "GIGME 0909120918 nap vi sinh vien",
+      "timestamp": 1790517363197,
+      "isSuccess": true
+    },
+    {
+      "id": "tx_wh_TELEGRAM_1790426300710",
+      "userId": "000000000",
+      "type": "VIETQR_DEPOSIT",
+      "amount": 20000,
+      "title": "Nạp tiền SelfHostedBot Tự Động (Real Webhook)",
+      "subtitle": "MBBank • Khớp lệnh tức thì 24/7",
+      "bankInfo": "TELEGRAM_1790426300710",
+      "note": "GIGME 0909120918",
+      "timestamp": 1790426300710,
+      "isSuccess": true
+    },
+    {
+      "id": "tx_wh_TEST_1790426292988",
+      "userId": "000000000",
+      "type": "VIETQR_DEPOSIT",
+      "amount": 100000,
+      "title": "Nạp tiền SelfHostedBot (Mô Phỏng) Tự Động (Real Webhook)",
+      "subtitle": "Vietcombank • Khớp lệnh tức thì 24/7",
+      "bankInfo": "TEST_1790426292988",
+      "note": "GIGME 0909120918 ung ho gigme",
+      "timestamp": 1790426292989,
+      "isSuccess": true
+    },
+    {
+      "id": "tx_wh_TEST_1790426285051",
+      "userId": "000000000",
+      "type": "VIETQR_DEPOSIT",
+      "amount": 50000,
+      "title": "Nạp tiền SelfHostedBot (Mô Phỏng) Tự Động (Real Webhook)",
+      "subtitle": "Ngân Hàng • Khớp lệnh tức thì 24/7",
+      "bankInfo": "TEST_1790426285051",
+      "note": "GIGME 0909120918 nap tien",
+      "timestamp": 1790426285052,
+      "isSuccess": true
+    },
+    {
       "id": "TX-WD-MU2TLSBB-0B2983",
       "userId": "user_student_tdtu",
       "type": "BANK_WITHDRAWAL",
@@ -219,5 +267,15 @@
       "isSuccess": true
     }
   ],
-  "safewalk": []
+  "safewalk": [],
+  "bankBotConfig": {
+    "bankName": "MBBank",
+    "bankCode": "MB",
+    "accountNumber": "0909120918",
+    "accountHolder": "NGUYEN VAN AN",
+    "secretKey": "gigme_secret_bot_2026",
+    "telegramBotToken": "",
+    "telegramChatId": "",
+    "enabled": true
+  }
 }

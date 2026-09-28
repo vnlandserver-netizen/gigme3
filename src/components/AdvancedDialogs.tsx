@@ -1132,7 +1132,7 @@ export const BankWithdrawDialog: React.FC<{ isOpen: boolean; onClose: () => void
   isOpen,
   onClose,
 }) => {
-  const { currentUser, withdrawToBank, showNotification } = useGigMe();
+  const { currentUser, withdrawToBank, checkWithdrawalEligibility, isOverBalanceLimit, showNotification } = useGigMe();
   const [bankName, setBankName] = useState('Vietcombank');
   const [accountNumber, setAccountNumber] = useState('');
   const [accountHolderName, setAccountHolderName] = useState(currentUser?.kycName || '');
@@ -1148,6 +1148,9 @@ export const BankWithdrawDialog: React.FC<{ isOpen: boolean; onClose: () => void
     amount: number;
     time: string;
   } | null>(null);
+
+  const numAmount = typeof amount === 'number' && amount > 0 ? amount : undefined;
+  const eligibility = checkWithdrawalEligibility(numAmount);
 
   useEffect(() => {
     if (isOpen) {
@@ -1188,19 +1191,32 @@ export const BankWithdrawDialog: React.FC<{ isOpen: boolean; onClose: () => void
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!accountNumber.trim()) {
+      triggerHaptic('error');
       showNotification('Thiếu số tài khoản', 'Vui lòng nhập số tài khoản ngân hàng thụ hưởng.');
       return;
     }
     if (!accountHolderName.trim()) {
+      triggerHaptic('error');
       showNotification('Thiếu tên chủ tài khoản', 'Vui lòng nhập họ tên chủ tài khoản.');
       return;
     }
-    const numAmount = Number(amount);
-    if (!numAmount || numAmount < 10000) {
+    const targetAmount = Number(amount);
+    if (!targetAmount || targetAmount < 10000) {
+      triggerHaptic('error');
       showNotification('Số tiền không hợp lệ', 'Số tiền rút tối thiểu là 10.000đ.');
       return;
     }
+
+    // Kiểm tra điều kiện rút tiền (3 triệu / lần, 15p cooldown, 1 việc, 5 ngày, 3h online, >50k, AML 1h)
+    const check = checkWithdrawalEligibility(targetAmount);
+    if (!check.allowed) {
+      triggerHaptic('error');
+      showNotification('Không đủ điều kiện rút tiền ⚠️', check.reason || 'Yêu cầu không hợp lệ');
+      return;
+    }
+
     if (useBiometrics && !currentUser?.isBiometricsEnabled) {
+      triggerHaptic('error');
       showNotification(
         'Sinh trắc học chưa kích hoạt',
         'Bạn chưa bật xác thực sinh trắc học trong phần Cài đặt tài khoản. Vui lòng bật hoặc nhập mã PIN 6 số.'
@@ -1208,21 +1224,25 @@ export const BankWithdrawDialog: React.FC<{ isOpen: boolean; onClose: () => void
       return;
     }
     if (!useBiometrics && (!pin || pin.length < 6)) {
+      triggerHaptic('error');
       showNotification('Mã PIN chưa đủ', 'Vui lòng nhập đủ 6 chữ số mã PIN ví.');
       return;
     }
 
-    const ok = withdrawToBank(bankName, accountNumber, accountHolderName, numAmount, pin, useBiometrics);
+    const ok = withdrawToBank(bankName, accountNumber, accountHolderName, targetAmount, pin, useBiometrics);
     if (ok) {
+      triggerHaptic('success');
       playNotificationSound('BANK_TING');
       setReceiptTx({
         id: `FT26${Date.now().toString().slice(-8)}`,
         bank: bankName,
         account: accountNumber,
         holder: accountHolderName,
-        amount: numAmount,
+        amount: targetAmount,
         time: new Date().toLocaleTimeString('vi-VN'),
       });
+    } else {
+      triggerHaptic('error');
     }
   };
 
@@ -1254,23 +1274,29 @@ export const BankWithdrawDialog: React.FC<{ isOpen: boolean; onClose: () => void
         {/* If completed, show Napas Electronic Receipt */}
         {receiptTx ? (
           <div className="py-4 space-y-4 animate-fade-in">
-            <div className="p-4 rounded-2xl bg-[#101A2C] border border-emerald-500/40 space-y-3 text-center">
-              <div className="w-12 h-12 rounded-full bg-emerald-500/20 border border-emerald-500 text-emerald-400 mx-auto flex items-center justify-center">
+            <div className="p-4 rounded-2xl bg-[#101A2C] border border-cyan-500/40 space-y-3 text-center">
+              <div className="w-12 h-12 rounded-full bg-cyan-500/20 border border-cyan-500 text-cyan-400 mx-auto flex items-center justify-center">
                 <CheckCircle2 className="w-6 h-6" />
               </div>
               <div>
-                <h4 className="font-extrabold text-white text-sm">Chuyển Tiền Napas 247 Thành Công!</h4>
-                <p className="text-xs text-slate-400 mt-0.5">Tiền đã được chuyển vào tài khoản ngân hàng thụ hưởng</p>
+                <h4 className="font-extrabold text-white text-sm">Lệnh Rút Tiền Đã Tiếp Nhận!</h4>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Số dư ví đã được tạm giữ an toàn. Quản trị viên đang thực hiện chuyển tiền thật qua Napas 247 tới tài khoản của bạn (dự kiến 5 - 15 phút).
+                </p>
               </div>
 
-              <div className="text-2xl font-black text-emerald-400 font-mono py-1">
+              <div className="text-2xl font-black text-cyan-400 font-mono py-1">
                 {formatVnd(receiptTx.amount)}
               </div>
 
               <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800 text-[11px] space-y-1.5 text-left font-mono">
                 <div className="flex justify-between">
-                  <span className="text-slate-400">Mã giao dịch FT:</span>
+                  <span className="text-slate-400">Mã giao dịch:</span>
                   <span className="text-[#00E5FF] font-bold">{receiptTx.id}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Trạng thái:</span>
+                  <span className="text-amber-400 font-bold">⏳ Chờ Admin chuyển khoản</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-400">Ngân hàng nhận:</span>
@@ -1285,25 +1311,88 @@ export const BankWithdrawDialog: React.FC<{ isOpen: boolean; onClose: () => void
                   <span className="text-white font-bold">{receiptTx.holder}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-400">Thời gian:</span>
+                  <span className="text-slate-400">Thời gian tạo:</span>
                   <span className="text-slate-300">{receiptTx.time}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Kênh xử lý:</span>
-                  <span className="text-emerald-400 font-bold">Napas 247 Instant Switch</span>
                 </div>
               </div>
             </div>
 
             <button
               onClick={onClose}
-              className="w-full py-2.5 rounded-xl bg-[#00E5FF] text-black font-extrabold text-xs hover:brightness-110 transition"
+              className="w-full py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-extrabold text-xs hover:brightness-110 transition shadow-lg"
             >
-              Hoàn Tất & Đóng
+              Tôi Đã Hiểu & Đóng
             </button>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="py-3 space-y-3 text-xs">
+            {/* Admin Bypass Test Badge */}
+            {eligibility.isAdminBypass && (
+              <div className="flex items-center space-x-2 p-2.5 rounded-xl bg-gradient-to-r from-purple-900/60 to-indigo-900/60 border border-purple-400/50 text-[11px] text-purple-200">
+                <Sparkles className="w-4 h-4 text-purple-300 shrink-0" />
+                <span>
+                  <strong>👑 QUYỀN ADMIN:</strong> Đã bypass toàn bộ điều kiện rút tiền &amp; trần 200 triệu (Dùng để kiểm thử).
+                </span>
+              </div>
+            )}
+
+            {/* Over 200M Balance Cap Warning (Ép rút tiền) */}
+            {isOverBalanceLimit && !eligibility.isAdminBypass && (
+              <div className="p-3 rounded-2xl bg-rose-950/80 border-2 border-rose-500 text-rose-200 space-y-1 animate-pulse">
+                <div className="flex items-center space-x-2 font-black text-xs text-white">
+                  <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                  <span>⚠️ VƯỢT HẠN MỨC 200 TRIỆU (ÉP RÚT TIỀN)</span>
+                </div>
+                <p className="text-[11px] text-rose-200/90 leading-relaxed">
+                  Số dư của bạn ({formatVnd(currentUser?.walletBalance || 0)}) đã vượt mức trần 200.000.000đ. Hệ thống tạm khóa đăng việc và nhận việc, yêu cầu bạn rút bớt tiền về tài khoản ngân hàng để tiếp tục sử dụng.
+                </p>
+              </div>
+            )}
+
+            {/* Policy Checklist Bar */}
+            <div className="p-2.5 rounded-2xl bg-[#0E1726] border border-slate-800 space-y-1.5 text-[10px]">
+              <div className="flex items-center justify-between text-slate-300 font-bold border-b border-slate-800 pb-1">
+                <span className="flex items-center space-x-1 text-[#00E5FF]">
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  <span>Quy Định Rút Tiền Bảo Mật</span>
+                </span>
+                <span className="text-amber-400 font-mono">Tối đa 3.000.000đ / lần</span>
+              </div>
+              <div className="grid grid-cols-2 gap-1 text-slate-400">
+                <span className="flex items-center space-x-1">
+                  <span className={`w-1.5 h-1.5 rounded-full ${eligibility.completedGigsCount >= 1 ? 'bg-emerald-400' : 'bg-slate-600'}`} />
+                  <span>Đã làm việc: {eligibility.completedGigsCount}/1 việc</span>
+                </span>
+                <span className="flex items-center space-x-1">
+                  <span className={`w-1.5 h-1.5 rounded-full ${eligibility.daysActive >= 5 ? 'bg-emerald-400' : 'bg-slate-600'}`} />
+                  <span>Tuổi tài khoản: {eligibility.daysActive}/5 ngày</span>
+                </span>
+                <span className="flex items-center space-x-1">
+                  <span className={`w-1.5 h-1.5 rounded-full ${eligibility.hoursOnline >= 3 ? 'bg-emerald-400' : 'bg-slate-600'}`} />
+                  <span>Online: {eligibility.hoursOnline.toFixed(1)}/3.0 giờ</span>
+                </span>
+                <span className="flex items-center space-x-1">
+                  <span className={`w-1.5 h-1.5 rounded-full ${(currentUser?.walletBalance || 0) > 50000 ? 'bg-emerald-400' : 'bg-slate-600'}`} />
+                  <span>Số dư ví: &gt; 50.000đ</span>
+                </span>
+              </div>
+              <div className="pt-0.5 text-slate-400/80 text-[9px] flex justify-between">
+                <span>⏱️ Giãn cách: 15 phút/lần rút</span>
+                <span>🛡️ Chống rửa tiền: Cách 1h sau nạp</span>
+              </div>
+            </div>
+
+            {/* Ineligibility Warning Box */}
+            {!eligibility.allowed && !eligibility.isAdminBypass && (
+              <div className="p-2.5 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-200 text-[11px] flex items-start space-x-2">
+                <Clock className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                <div className="space-y-0.5">
+                  <strong className="block text-amber-300 font-bold">Chưa đủ điều kiện rút tiền:</strong>
+                  <span>{eligibility.reason}</span>
+                </div>
+              </div>
+            )}
+
             {/* Napas 24/7 Gateway Status Indicator */}
             <div className="flex items-center justify-between p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-[10px]">
               <div className="flex items-center space-x-1.5 text-emerald-400 font-bold">
@@ -1311,9 +1400,9 @@ export const BankWithdrawDialog: React.FC<{ isOpen: boolean; onClose: () => void
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                 </span>
-                <span>Cổng Giải Ngân Tự Động 24/7 Napas</span>
+                <span>Cổng Rút Tiền Napas 247 (Cách 1: Admin Duyệt)</span>
               </div>
-              <span className="text-emerald-300/80 font-mono font-bold">~{AUTO_DISBURSEMENT_KEYS.averageLatencyMs}ms • T0</span>
+              <span className="text-emerald-300/80 font-mono font-bold">T0 • Miễn phí 0đ</span>
             </div>
 
             <div>
@@ -1368,7 +1457,7 @@ export const BankWithdrawDialog: React.FC<{ isOpen: boolean; onClose: () => void
 
             <div>
               <div className="flex justify-between items-center mb-1">
-                <label className="text-slate-300 font-semibold">Số tiền muốn rút (VND)</label>
+                <label className="text-slate-300 font-semibold">Số tiền muốn rút (Tối đa 3.000.000đ/lần)</label>
                 <span className="text-[10px] text-slate-400">
                   Khả dụng: <strong className="text-emerald-400">{currentUser ? formatVnd(currentUser.walletBalance) : '0đ'}</strong>
                 </span>
@@ -1376,16 +1465,17 @@ export const BankWithdrawDialog: React.FC<{ isOpen: boolean; onClose: () => void
               <input
                 type="number"
                 step="10000"
+                max={eligibility.isAdminBypass ? undefined : 3000000}
                 required
                 value={amount}
                 onChange={(e) => setAmount(e.target.value ? Number(e.target.value) : '')}
                 className="w-full px-3 py-2 rounded-xl bg-[#131E30] border border-slate-700 text-white font-mono font-bold text-sm"
-                placeholder="Ví dụ: 100000"
+                placeholder="Nhập số tiền (tối đa 3.000.000đ)..."
               />
 
-              {/* Quick Amount Chips */}
+              {/* Quick Amount Chips (tối đa 3M) */}
               <div className="flex flex-wrap gap-1.5 mt-2">
-                {[50000, 100000, 200000, 500000].map((preset) => (
+                {[50000, 100000, 200000, 500000, 1000000, 3000000].map((preset) => (
                   <button
                     key={preset}
                     type="button"
@@ -1402,17 +1492,25 @@ export const BankWithdrawDialog: React.FC<{ isOpen: boolean; onClose: () => void
                 {currentUser && currentUser.walletBalance > 0 && (
                   <button
                     type="button"
-                    onClick={() => setAmount(currentUser.walletBalance)}
+                    onClick={() => {
+                      if (eligibility.isAdminBypass) {
+                        setAmount(currentUser.walletBalance);
+                      } else {
+                        setAmount(Math.min(currentUser.walletBalance, 3000000));
+                      }
+                    }}
                     className="px-2 py-1 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-[#00E5FF] text-[10px] font-bold transition hover:bg-cyan-500/20"
                   >
-                    Rút Hết Số Dư
+                    {currentUser.walletBalance > 3000000 && !eligibility.isAdminBypass
+                      ? 'Rút Tối Đa (3.000.000đ)'
+                      : 'Rút Hết Số Dư'}
                   </button>
                 )}
               </div>
 
               <div className="flex justify-between items-center text-[10px] text-slate-400 pt-1.5 px-0.5">
                 <span>Phí giao dịch rút tiền: <strong className="text-emerald-400">0đ (Miễn phí)</strong></span>
-                <span>Thời gian: <strong className="text-cyan-300">&lt; 3 giây</strong></span>
+                <span>Hạn mức: <strong className="text-amber-300">Tối đa 3M / lần</strong></span>
               </div>
             </div>
 
@@ -1448,10 +1546,19 @@ export const BankWithdrawDialog: React.FC<{ isOpen: boolean; onClose: () => void
 
             <button
               type="submit"
-              className="w-full py-3 rounded-2xl bg-gradient-to-r from-red-600 via-rose-500 to-orange-500 text-white font-extrabold text-xs sm:text-sm hover:brightness-110 shadow-lg shadow-red-600/20 transition flex items-center justify-center space-x-1.5"
+              disabled={!eligibility.allowed && !eligibility.isAdminBypass}
+              className={`w-full py-3 rounded-2xl text-white font-extrabold text-xs sm:text-sm shadow-lg transition flex items-center justify-center space-x-1.5 cursor-pointer ${
+                eligibility.allowed || eligibility.isAdminBypass
+                  ? 'bg-gradient-to-r from-red-600 via-rose-500 to-orange-500 hover:brightness-110 shadow-red-600/20'
+                  : 'bg-slate-700 text-slate-400 cursor-not-allowed opacity-60'
+              }`}
             >
               <Zap className="w-4 h-4 fill-current" />
-              <span>Xác Nhận Rút Tiền Napas 247 Ngay</span>
+              <span>
+                {eligibility.allowed || eligibility.isAdminBypass
+                  ? 'Xác Nhận Tạo Lệnh Rút Tiền Napas 247'
+                  : eligibility.reason || 'Chưa đủ điều kiện rút tiền'}
+              </span>
             </button>
           </form>
         )}
@@ -1476,25 +1583,31 @@ export const EWalletDialog: React.FC<{ isOpen: boolean; onClose: () => void }> =
 
   const handleAction = () => {
     if (!phone.trim()) {
+      triggerHaptic('error');
       showNotification('Thiếu SĐT ví', 'Vui lòng nhập số điện thoại liên kết ví.');
       return;
     }
     const numAmount = Number(amount);
     if (mode === 'LINK') {
+      triggerHaptic('success');
       linkEWallet(walletType, phone);
       setMode('DEPOSIT');
     } else if (mode === 'DEPOSIT') {
       if (!numAmount || numAmount < 10000) {
+        triggerHaptic('error');
         showNotification('Số tiền không hợp lệ', 'Số tiền nạp tối thiểu là 10.000đ.');
         return;
       }
+      triggerHaptic('success');
       depositEWallet(walletType, numAmount);
       onClose();
     } else {
       if (!numAmount || numAmount < 10000) {
+        triggerHaptic('error');
         showNotification('Số tiền không hợp lệ', 'Số tiền rút tối thiểu là 10.000đ.');
         return;
       }
+      triggerHaptic('success');
       withdrawEWallet(walletType, numAmount, phone);
       onClose();
     }

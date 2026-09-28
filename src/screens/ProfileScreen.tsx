@@ -35,10 +35,12 @@ import {
 import { useGigMe } from '../context/GigMeContext';
 import { USER_TIERS, formatVnd } from '../types';
 import { playNotificationSound } from '../utils/audio';
+import { triggerHaptic } from '../utils/haptics';
 import { SoundSettingsDialog, BusinessUpgradeDialog } from '../components/AdvancedDialogs';
 import { AvatarPickerModal } from '../components/AvatarPickerModal';
 import { StudentEloModal } from '../components/StudentEloModal';
 import { VerifiedEduBadge } from '../components/VerifiedEduBadge';
+import { VerifiedIdentityBadge } from '../components/VerifiedIdentityBadge';
 import { EduEmailVerificationModal } from '../components/EduEmailVerificationModal';
 import { FriendBackupRestoreModal } from '../components/FriendBackupRestoreModal';
 import { TermsAndRefundPolicyModal } from '../components/TermsAndRefundPolicyModal';
@@ -200,11 +202,15 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             <div className="min-w-0">
               <div className="flex items-center space-x-2 flex-wrap gap-y-1">
                 <h2 className="text-sm sm:text-base font-extrabold text-white truncate">{currentUser.name}</h2>
-                {(currentUser.isEduVerified || currentUser.isStudentVerified) && (
-                  <VerifiedEduBadge
-                    school={currentUser.studentSchool || 'Đại học'}
+                {(currentUser.isNfcVerified || currentUser.isStudentVerified || currentUser.isEduVerified) && (
+                  <VerifiedIdentityBadge
+                    isCccdVerified={!!currentUser.isNfcVerified}
+                    isStudentVerified={!!(currentUser.isStudentVerified || currentUser.isEduVerified)}
+                    school={currentUser.studentSchool}
                     size="sm"
                     showText={true}
+                    interactive={true}
+                    onBadgeClick={onOpenNfcDialog}
                   />
                 )}
                 <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-[#3064AE]/30 text-[#C5E5EC] border border-[#C5E5EC]/40 shrink-0">
@@ -252,7 +258,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
               <div className="flex items-center space-x-3 mt-1.5 text-[11px] flex-wrap gap-y-1">
                 <span className="flex items-center text-amber-300 font-bold">
-                  <Star className="w-3.5 h-3.5 fill-current mr-1" /> {currentUser.rating}/5.0 ({currentUser.reviewCount ?? 0})
+                  <Star className={`w-3.5 h-3.5 mr-1 ${(currentUser.reviewCount ?? 0) > 0 ? 'fill-current text-amber-300' : 'text-slate-500'}`} />
+                  {(currentUser.reviewCount ?? 0) > 0 ? `${currentUser.rating}/5.0` : '0/5.0'} ({currentUser.reviewCount ?? 0})
                 </span>
                 <span className="text-slate-500">•</span>
                 <span className="flex items-center text-[#E0FAEB] font-semibold">
@@ -310,18 +317,22 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           <div className="p-3 rounded-2xl bg-[#12233B] border border-[#C5E5EC]/15">
             <span className="text-[#C5E5EC]/70 block text-[10px]">Điểm ELO Tín Nhiệm:</span>
             <span className="text-xl font-black text-amber-400 font-mono">
-              {currentUser.eloRating ?? 1250}
+              {currentUser.eloRating ?? 200}
             </span>
-            <span className="text-[10px] text-[#C5E5EC]/60 block mt-0.5">Top 15% Campus</span>
+            <span className="text-[10px] text-[#C5E5EC]/60 block mt-0.5">
+              {(currentUser.eloRating ?? 200) <= 299 ? 'Hạng Đồng (Tân Binh)' : 'Campus Member'}
+            </span>
           </div>
 
           <div className="p-3 rounded-2xl bg-[#12233B] border border-[#C5E5EC]/15">
             <span className="text-[#C5E5EC]/70 block text-[10px]">Chuỗi 5 Sao Liên Tiếp:</span>
             <span className="text-xl font-black text-rose-400 font-mono flex items-center">
               <Flame className="w-4 h-4 mr-1 fill-rose-500 animate-pulse" />
-              {currentUser.winStreak ?? 5} Đơn
+              {currentUser.winStreak ?? 0} Đơn
             </span>
-            <span className="text-[10px] text-[#E0FAEB] block mt-0.5">Tín nhiệm cao</span>
+            <span className="text-[10px] text-[#E0FAEB] block mt-0.5">
+              {(currentUser.winStreak ?? 0) >= 3 ? 'Chuỗi phong độ cao' : 'Khởi đầu'}
+            </span>
           </div>
 
           <div className="p-3 rounded-2xl bg-[#12233B] border border-[#C5E5EC]/15">
@@ -408,7 +419,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
           <div className="p-3 rounded-2xl bg-[#12233B] border border-[#C5E5EC]/15">
             <span className="text-[#C5E5EC]/70 block text-[10px] mb-1">Đặc quyền sinh viên:</span>
-            <span className="font-extrabold text-[#E0FAEB] text-xs block">Vay SOS 500.000đ 0%</span>
+            <span className="font-extrabold text-[#E0FAEB] text-xs block">Bảo hộ Escrow 100%</span>
             <span className="text-[10px] text-[#C5E5EC]/60">Ưu tiên nhận việc tốt</span>
           </div>
         </div>
@@ -495,123 +506,121 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 rounded-2xl bg-[#12233B] border border-[#C5E5EC]/20">
           <div className="text-center sm:text-left flex items-center space-x-3 sm:border-r border-[#C5E5EC]/15 sm:pr-4">
             <span className="text-3xl font-black text-amber-400 font-mono">
-              {currentUser.rating || 4.9}
+              {(currentUser.reviewCount ?? 0) > 0 ? (currentUser.rating || 0).toFixed(1) : '0.0'}
             </span>
             <div>
               <div className="flex items-center space-x-0.5">
-                {[1, 2, 3, 4, 5].map((s) => (
-                  <Star key={s} className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
-                ))}
+                {[1, 2, 3, 4, 5].map((s) => {
+                  const hasReviews = (currentUser.reviewCount ?? 0) > 0;
+                  const isFilled = hasReviews && (currentUser.rating || 0) >= s;
+                  const isHalf = hasReviews && !isFilled && (currentUser.rating || 0) >= s - 0.5;
+                  return (
+                    <Star
+                      key={s}
+                      className={`w-3.5 h-3.5 ${
+                        isFilled
+                          ? 'text-amber-400 fill-amber-400'
+                          : isHalf
+                          ? 'text-amber-400 fill-amber-400/50'
+                          : 'text-slate-600 fill-transparent'
+                      }`}
+                    />
+                  );
+                })}
               </div>
               <span className="text-[11px] text-[#C5E5EC]/70 block mt-0.5">
-                {currentUser.reviewCount || 18} lượt đánh giá
+                {currentUser.reviewCount ?? 0} lượt đánh giá {(currentUser.reviewCount ?? 0) === 0 ? '(Chưa có đánh giá)' : ''}
               </span>
             </div>
           </div>
 
           <div className="col-span-2 flex flex-wrap items-center gap-1.5">
-            {[
-              { label: '⚡ Siêu tốc đúng giờ', count: '98%' },
-              { label: '🎯 Chu đáo chất lượng', count: '96%' },
-              { label: '🤝 Thân thiện hòa đồng', count: '100%' },
-              { label: '🛡️ Bảo chứng Escrow', count: '100%' },
-            ].map((tag, idx) => (
-              <span
-                key={idx}
-                className="px-2.5 py-1 rounded-xl bg-[#0E1B2E] border border-[#C5E5EC]/20 text-[#C5E5EC] text-[11px] font-semibold flex items-center space-x-1"
-              >
-                <span>{tag.label}</span>
-                <span className="text-[#E0FAEB] font-bold font-mono">({tag.count})</span>
+            {(currentUser.reviewCount ?? 0) > 0 ? (
+              [
+                { label: '⚡ Siêu tốc đúng giờ', count: '98%' },
+                { label: '🎯 Chu đáo chất lượng', count: '96%' },
+                { label: '🤝 Thân thiện hòa đồng', count: '100%' },
+                { label: '🛡️ Bảo chứng Escrow', count: '100%' },
+              ].map((tag, idx) => (
+                <span
+                  key={idx}
+                  className="px-2.5 py-1 rounded-xl bg-[#0E1B2E] border border-[#C5E5EC]/20 text-[#C5E5EC] text-[11px] font-semibold flex items-center space-x-1"
+                >
+                  <span>{tag.label}</span>
+                  <span className="text-[#E0FAEB] font-bold font-mono">({tag.count})</span>
+                </span>
+              ))
+            ) : (
+              <span className="text-[11px] text-[#C5E5EC]/60 italic py-1">
+                Tài khoản mới bắt đầu — Chưa có thống kê đánh giá
               </span>
-            ))}
+            )}
           </div>
         </div>
 
         {/* Real Reviews List */}
         <div className="space-y-2.5">
-          {(currentUser.reviews && currentUser.reviews.length > 0
-            ? currentUser.reviews
-            : [
-                {
-                  id: 'rev_1',
-                  reviewerName: 'Nguyễn Hoàng Phúc',
-                  reviewerSchool: 'Đại học Bách Khoa TP.HCM',
-                  rating: 5,
-                  comment: 'Làm bài tập C++ giải thuật rất chuẩn, có kèm chú thích rõ ràng, đúng hẹn trước 2 tiếng.',
-                  tags: ['Đúng giờ ⏱️', 'Chuyên môn giỏi 🧠'],
-                  createdAt: 'Hôm nay',
-                  gigTitle: 'Hỗ trợ debug code bài tập lớn C++',
-                },
-                {
-                  id: 'rev_2',
-                  reviewerName: 'Trần Thảo Linh',
-                  reviewerSchool: 'Đại học Tôn Đức Thắng (TDTU)',
-                  rating: 5,
-                  comment: 'Giao đồ ăn trưa lên tận tầng 5 phòng tự học, đồ ăn còn nóng hổi, rất lịch sự và nhiệt tình!',
-                  tags: ['Giao siêu tốc 🚀', 'Thân thiện vui vẻ 😊'],
-                  createdAt: 'Hôm qua',
-                  gigTitle: 'Mua giúp cơm trưa căn tin TDTU',
-                },
-                {
-                  id: 'rev_3',
-                  reviewerName: 'Lê Minh Trí',
-                  reviewerSchool: 'Đại học Ngoại Thương (FTU2)',
-                  rating: 5,
-                  comment: 'In ấn tài liệu và đóng gáy lò xo đẹp xuất sắc, giao đúng giờ tại sảnh A.',
-                  tags: ['Tài liệu chuẩn 📚', 'Nhiệt tình 💯'],
-                  createdAt: '2 ngày trước',
-                  gigTitle: 'In ấn và photo slide bài giảng',
-                },
-              ]
-          ).map((rev) => (
-            <div
-              key={rev.id}
-              className="p-3.5 rounded-2xl bg-[#12233B] border border-[#C5E5EC]/15 space-y-2 text-xs"
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-[#3064AE] to-[#417AC6] text-white font-bold flex items-center justify-center text-xs">
-                    {rev.reviewerName.charAt(0).toUpperCase()}
-                  </div>
-                  <div>
-                    <div className="flex items-center space-x-1.5">
-                      <span className="font-bold text-white">{rev.reviewerName}</span>
-                      <span className="text-[10px] px-1.5 py-0.2 rounded bg-[#E0FAEB]/15 text-[#E0FAEB] font-semibold border border-[#E0FAEB]/30">
-                        Đã xác minh
-                      </span>
+          {currentUser.reviews && currentUser.reviews.length > 0 ? (
+            currentUser.reviews.map((rev) => (
+              <div
+                key={rev.id}
+                className="p-3.5 rounded-2xl bg-[#12233B] border border-[#C5E5EC]/15 space-y-2 text-xs"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-[#3064AE] to-[#417AC6] text-white font-bold flex items-center justify-center text-xs">
+                      {rev.reviewerName.charAt(0).toUpperCase()}
                     </div>
-                    {rev.reviewerSchool && (
-                      <span className="text-[10px] text-[#C5E5EC]/70 block">{rev.reviewerSchool}</span>
-                    )}
+                    <div>
+                      <div className="flex items-center space-x-1.5">
+                        <span className="font-bold text-white">{rev.reviewerName}</span>
+                        <span className="text-[10px] px-1.5 py-0.2 rounded bg-[#E0FAEB]/15 text-[#E0FAEB] font-semibold border border-[#E0FAEB]/30">
+                          Đã xác minh
+                        </span>
+                      </div>
+                      {rev.reviewerSchool && (
+                        <span className="text-[10px] text-[#C5E5EC]/70 block">{rev.reviewerSchool}</span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center space-x-1">
+                    {[...Array(rev.rating)].map((_, i) => (
+                      <Star key={i} className="w-3 h-3 text-amber-400 fill-amber-400" />
+                    ))}
+                    <span className="text-[10px] text-[#C5E5EC]/60 pl-1">{rev.createdAt}</span>
                   </div>
                 </div>
 
-                <div className="flex items-center space-x-1">
-                  {[...Array(rev.rating)].map((_, i) => (
-                    <Star key={i} className="w-3 h-3 text-amber-400 fill-amber-400" />
-                  ))}
-                  <span className="text-[10px] text-[#C5E5EC]/60 pl-1">{rev.createdAt}</span>
-                </div>
+                <p className="text-slate-200 text-[11px] leading-relaxed">
+                  &ldquo;{rev.comment}&rdquo;
+                </p>
+
+                {rev.tags && rev.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-1 pt-1">
+                    {rev.tags.map((t, idx) => (
+                      <span
+                        key={idx}
+                        className="px-2 py-0.5 rounded-md bg-[#0E1B2E] border border-[#C5E5EC]/15 text-[#C5E5EC] text-[10px]"
+                      >
+                        {t}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
-
-              <p className="text-slate-200 text-[11px] leading-relaxed">
-                &ldquo;{rev.comment}&rdquo;
+            ))
+          ) : (
+            <div className="p-6 rounded-2xl bg-[#12233B]/60 border border-[#C5E5EC]/10 text-center space-y-2">
+              <div className="w-10 h-10 rounded-full bg-slate-800 text-slate-400 mx-auto flex items-center justify-center text-lg">
+                💬
+              </div>
+              <p className="text-xs font-semibold text-slate-300">Chưa có nhận xét nào từ cộng đồng</p>
+              <p className="text-[11px] text-[#C5E5EC]/60 max-w-xs mx-auto">
+                Khi hoàn thành các công việc trên Campus, đánh giá thực tế và điểm số tín nhiệm từ người thuê sẽ xuất hiện tại đây.
               </p>
-
-              {rev.tags && rev.tags.length > 0 && (
-                <div className="flex flex-wrap gap-1 pt-1">
-                  {rev.tags.map((t, idx) => (
-                    <span
-                      key={idx}
-                      className="px-2 py-0.5 rounded-md bg-[#0E1B2E] border border-[#C5E5EC]/15 text-[#C5E5EC] text-[10px]"
-                    >
-                      {t}
-                    </span>
-                  ))}
-                </div>
-              )}
             </div>
-          ))}
+          )}
         </div>
       </div>
 
@@ -918,22 +927,46 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           <ChevronRight className="w-4 h-4 text-[#C5E5EC]/60" />
         </button>
 
-        {/* THEME TOGGLE (OCEANIC BLUE / DEEP OBSIDIAN DARK) */}
-        <div className="w-full p-3 rounded-2xl bg-[#12233B] border border-[#C5E5EC]/15 flex items-center justify-between">
+        {/* GLOBAL THEME TOGGLE (DARK / LIGHT MODE) */}
+        <div className="w-full p-3.5 rounded-2xl bg-white dark:bg-[#12233B] border border-slate-200 dark:border-[#C5E5EC]/15 shadow-sm flex items-center justify-between transition-colors duration-200">
           <div className="flex items-center space-x-3">
-            {isDarkMode ? <Moon className="w-4 h-4 text-[#C5E5EC]" /> : <Sun className="w-4 h-4 text-amber-300" />}
+            <div className={`p-2 rounded-xl transition-colors duration-200 ${
+              isDarkMode ? 'bg-indigo-950/60 text-cyan-300' : 'bg-amber-100 text-amber-600'
+            }`}>
+              {isDarkMode ? <Moon className="w-4 h-4 fill-cyan-400/20" /> : <Sun className="w-4 h-4 fill-amber-400" />}
+            </div>
             <div>
-              <h4 className="font-bold text-white text-xs">Giao Diện Xanh Dạ Quang / Siêu Tối</h4>
-              <p className="text-[10px] text-[#C5E5EC]/70">
-                {isDarkMode ? 'Đang bật Siêu Tối (Obsidian Black 100%)' : 'Đang bật Xanh Dạ Quang (Oceanic Navy Blue)'}
+              <h4 className="font-extrabold text-slate-900 dark:text-white text-xs">
+                {isDarkMode ? 'Chế Độ Giao Diện Tối (Dark Mode)' : 'Chế Độ Giao Diện Sáng (Daylight)'}
+              </h4>
+              <p className="text-[10px] text-slate-500 dark:text-[#C5E5EC]/70">
+                {isDarkMode ? 'Bảo vệ mắt ban đêm, tiết kiệm pin tối đa' : 'Hiển thị sáng rõ nét dưới ánh sáng ban ngày'}
               </p>
             </div>
           </div>
           <button
-            onClick={toggleDarkMode}
-            className="px-3 py-1 rounded-xl bg-[#3064AE]/30 hover:bg-[#3064AE]/50 text-xs font-bold text-[#C5E5EC] border border-[#C5E5EC]/30 transition active:scale-95 cursor-pointer"
+            onClick={() => {
+              triggerHaptic('medium');
+              toggleDarkMode();
+            }}
+            className={`px-3 py-1.5 rounded-xl text-xs font-black transition active:scale-95 cursor-pointer flex items-center space-x-1.5 shadow-sm ${
+              isDarkMode
+                ? 'bg-amber-400/15 hover:bg-amber-400/25 text-amber-300 border border-amber-400/30'
+                : 'bg-[#3064AE] hover:bg-[#255294] text-white shadow-[#3064AE]/20'
+            }`}
+            title="Nhấn để đổi giao diện"
           >
-            {isDarkMode ? '🌑 Siêu Tối' : '🌌 Xanh Đêm'}
+            {isDarkMode ? (
+              <>
+                <Sun className="w-3.5 h-3.5 text-amber-400" />
+                <span>Bật Sáng</span>
+              </>
+            ) : (
+              <>
+                <Moon className="w-3.5 h-3.5 text-white" />
+                <span>Bật Tối</span>
+              </>
+            )}
           </button>
         </div>
 

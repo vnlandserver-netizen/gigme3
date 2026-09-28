@@ -1,33 +1,86 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { GigMeProvider, useGigMe } from './context/GigMeContext';
 import { Header } from './components/Header';
 import { BottomNav, TabScreen } from './components/BottomNav';
 import { HomeScreen } from './screens/HomeScreen';
-import { CreateGigScreen } from './screens/CreateGigScreen';
-import { GigDetailScreen } from './screens/GigDetailScreen';
-import { WalletScreen } from './screens/WalletScreen';
-import { ProfileScreen } from './screens/ProfileScreen';
-import { AdminDashboardScreen } from './screens/AdminDashboardScreen';
-import { CampusLeaderboardScreen } from './screens/CampusLeaderboardScreen';
-import { CampusMarketplaceScreen } from './screens/CampusMarketplaceScreen';
-import { ChatSupportScreen } from './screens/ChatSupportScreen';
 import { AuthScreen } from './screens/AuthScreen';
-
-import {
-  NfcCccdScanDialog,
-  FaceLivenessDialog,
-  StudentSsoDialog,
-} from './components/AdvancedDialogs';
-import { DownloadAppDialog } from './components/DownloadAppDialog';
-import { FcmPushNotificationModal } from './components/FcmPushNotificationModal';
-import { StudentEloModal } from './components/StudentEloModal';
-import { VietQrOpenApiAutoScanner } from './components/VietQrOpenApiAutoScanner';
-import { MoMoZaloPayGatewayModal } from './components/MoMoZaloPayGatewayModal';
-import { GeminiVisionStudentIdModal } from './components/GeminiVisionStudentIdModal';
-import { VoipCallOverlay } from './components/VoipCallOverlay';
-import { BlockchainProofModal } from './components/BlockchainProofModal';
 import { SystemMaintenanceOverlay } from './components/SystemMaintenanceOverlay';
-import { Wrench } from 'lucide-react';
+import { Wrench, Loader2 } from 'lucide-react';
+
+// Code-Splitting: Lazy load secondary screens to accelerate initial app load
+const CreateGigScreen = lazy(() =>
+  import('./screens/CreateGigScreen').then((m) => ({ default: m.CreateGigScreen }))
+);
+const GigDetailScreen = lazy(() =>
+  import('./screens/GigDetailScreen').then((m) => ({ default: m.GigDetailScreen }))
+);
+const WalletScreen = lazy(() =>
+  import('./screens/WalletScreen').then((m) => ({ default: m.WalletScreen }))
+);
+const ProfileScreen = lazy(() =>
+  import('./screens/ProfileScreen').then((m) => ({ default: m.ProfileScreen }))
+);
+const AdminDashboardScreen = lazy(() =>
+  import('./screens/AdminDashboardScreen').then((m) => ({ default: m.AdminDashboardScreen }))
+);
+const CampusMarketplaceScreen = lazy(() =>
+  import('./screens/CampusMarketplaceScreen').then((m) => ({ default: m.CampusMarketplaceScreen }))
+);
+const ChatSupportScreen = lazy(() =>
+  import('./screens/ChatSupportScreen').then((m) => ({ default: m.ChatSupportScreen }))
+);
+
+// Code-Splitting: Lazy load heavy dialogs only when opened by the user
+const NfcCccdScanDialog = lazy(() =>
+  import('./components/AdvancedDialogs').then((m) => ({ default: m.NfcCccdScanDialog }))
+);
+const FaceLivenessDialog = lazy(() =>
+  import('./components/AdvancedDialogs').then((m) => ({ default: m.FaceLivenessDialog }))
+);
+const StudentSsoDialog = lazy(() =>
+  import('./components/AdvancedDialogs').then((m) => ({ default: m.StudentSsoDialog }))
+);
+import { DownloadAppDialog } from './components/DownloadAppDialog';
+import { SmartInstallBanner } from './components/SmartInstallBanner';
+import { VoipCallOverlay } from './components/VoipCallOverlay';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import { GamificationBanner } from './components/GamificationBanner';
+import { subscribeToNotifications } from './lib/firebase';
+const FcmPushNotificationModal = lazy(() =>
+  import('./components/FcmPushNotificationModal').then((m) => ({ default: m.FcmPushNotificationModal }))
+);
+const StudentEloModal = lazy(() =>
+  import('./components/StudentEloModal').then((m) => ({ default: m.StudentEloModal }))
+);
+const VietQrOpenApiAutoScanner = lazy(() =>
+  import('./components/VietQrOpenApiAutoScanner').then((m) => ({ default: m.VietQrOpenApiAutoScanner }))
+);
+const MoMoZaloPayGatewayModal = lazy(() =>
+  import('./components/MoMoZaloPayGatewayModal').then((m) => ({ default: m.MoMoZaloPayGatewayModal }))
+);
+const GeminiVisionStudentIdModal = lazy(() =>
+  import('./components/GeminiVisionStudentIdModal').then((m) => ({ default: m.GeminiVisionStudentIdModal }))
+);
+const BlockchainProofModal = lazy(() =>
+  import('./components/BlockchainProofModal').then((m) => ({ default: m.BlockchainProofModal }))
+);
+
+// High-performance smooth loading skeleton for lazy loaded tab screens
+const ScreenLoadingSpinner: React.FC<{ label?: string }> = ({ label = 'Đang tải dữ liệu...' }) => (
+  <div className="flex flex-col items-center justify-center min-h-[55vh] space-y-4 px-4 text-center animate-fadeIn">
+    <div className="relative">
+      <div className="w-12 h-12 rounded-full border-3 border-[#3064AE]/30 border-t-[#C5E5EC] animate-spin" />
+      <div className="absolute inset-0 flex items-center justify-center">
+        <div className="w-2 h-2 rounded-full bg-[#E0FAEB] animate-pulse" />
+      </div>
+    </div>
+    <div className="space-y-1">
+      <p className="text-xs font-bold text-slate-200 tracking-wide">{label}</p>
+      <p className="text-[11px] text-[#C5E5EC]/60">GigMe Code-Splitting • Tối ưu mở app siêu tốc</p>
+    </div>
+  </div>
+);
+
 
 const MainLayout: React.FC = () => {
   const {
@@ -37,9 +90,52 @@ const MainLayout: React.FC = () => {
     isMaintenanceActive,
     maintenanceConfig,
     setMaintenanceMode,
+    activeVoipCall,
+    showNotification,
   } = useGigMe();
 
   const [currentTab, setCurrentTab] = useState<TabScreen>('HOME');
+
+  // Real-time Firestore 'notifications' collection listener
+  // Monitors new gigs and status updates across users in real-time
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const unsubscribe = subscribeToNotifications((notif) => {
+      // Filter if target user is specified and not matching current user or broadcast
+      if (notif.userId && notif.userId !== 'ALL' && notif.userId !== currentUser.id) {
+        return;
+      }
+
+      // Check notification type
+      if (notif.type === 'NEW_GIG') {
+        showNotification(
+          notif.title || '🔥 Việc Mới Vừa Đăng!',
+          notif.message || (notif.gigTitle ? `Việc mới: "${notif.gigTitle}" vừa xuất hiện trên campus.` : 'Có công việc mới phù hợp với bạn!'),
+          true,
+          true
+        );
+      } else if (notif.type === 'STATUS_UPDATE') {
+        showNotification(
+          notif.title || '⚡ Cập Nhật Trạng Thái Đơn Việc',
+          notif.message || `Đơn việc #${notif.gigId?.slice(-6) || ''} đã chuyển sang trạng thái ${notif.status || 'mới'}.`,
+          true,
+          false
+        );
+      } else {
+        showNotification(
+          notif.title || '🔔 Thông Báo Mới',
+          notif.message,
+          true,
+          false
+        );
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [currentUser?.id, showNotification]);
 
   // Modals state
   const [showNfcModal, setShowNfcModal] = useState(false);
@@ -114,7 +210,6 @@ const MainLayout: React.FC = () => {
             onSelectGigDetail={handleOpenGigDetail}
             onOpenCreateGig={() => setCurrentTab('CREATE_GIG')}
             onOpenVerify={() => setShowNfcModal(true)}
-            onOpenLeaderboard={() => setCurrentTab('LEADERBOARD')}
             onOpenMarketplace={() => setCurrentTab('MARKETPLACE')}
             onOpenVietQrScanner={() => setShowVietQrScanner(true)}
             onOpenPaymentGateway={() => setShowPaymentGateway(true)}
@@ -145,13 +240,6 @@ const MainLayout: React.FC = () => {
         );
       case 'ADMIN':
         return <AdminDashboardScreen onBack={() => setCurrentTab('PROFILE')} />;
-      case 'LEADERBOARD':
-        return (
-          <CampusLeaderboardScreen
-            onBack={() => setCurrentTab('HOME')}
-            onSelectFreelancer={() => {}}
-          />
-        );
       case 'MARKETPLACE':
         return (
           <CampusMarketplaceScreen
@@ -167,23 +255,26 @@ const MainLayout: React.FC = () => {
             onSelectGigDetail={handleOpenGigDetail}
             onOpenCreateGig={() => setCurrentTab('CREATE_GIG')}
             onOpenVerify={() => setShowNfcModal(true)}
-            onOpenLeaderboard={() => setCurrentTab('LEADERBOARD')}
             onOpenMarketplace={() => setCurrentTab('MARKETPLACE')}
             onOpenVietQrScanner={() => setShowVietQrScanner(true)}
             onOpenPaymentGateway={() => setShowPaymentGateway(true)}
-            onOpenGeminiVision={() => setShowNfcModal(true)}
+            onOpenGeminiVision={() => setShowGeminiVision(true)}
             onOpenFcmPush={() => setShowFcmPush(true)}
             onOpenEloModal={() => setShowEloModal(true)}
+            onOpenDownloadApp={() => setShowDownloadApp(true)}
           />
         );
     }
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-b from-[#0C1728] via-[#102038] to-[#0C1728] text-slate-100 selection:bg-[#3064AE] selection:text-[#E0FAEB] transition-colors duration-200 relative overflow-x-hidden">
+    <div className="min-h-screen flex flex-col bg-[#F6F8FC] dark:bg-gradient-to-b dark:from-[#0C1728] dark:via-[#102038] dark:to-[#0C1728] text-slate-900 dark:text-slate-100 selection:bg-[#3064AE] selection:text-[#E0FAEB] transition-colors duration-200 relative overflow-x-hidden">
       {/* Decorative ambient color washes for Cobalt Blue, Crystal Blue, and Ethereal Green brand palette */}
-      <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-br from-[#3064AE]/20 to-[#C5E5EC]/15 rounded-full blur-3xl pointer-events-none -z-10" />
-      <div className="absolute top-80 left-0 w-80 h-80 bg-gradient-to-tr from-[#3064AE]/15 via-[#C5E5EC]/10 to-[#E0FAEB]/10 rounded-full blur-3xl pointer-events-none -z-10" />
+      <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-br from-[#3064AE]/10 dark:from-[#3064AE]/20 to-[#C5E5EC]/10 dark:to-[#C5E5EC]/15 rounded-full blur-3xl pointer-events-none -z-10" />
+      <div className="absolute top-80 left-0 w-80 h-80 bg-gradient-to-tr from-[#3064AE]/10 dark:from-[#3064AE]/15 via-[#C5E5EC]/5 dark:via-[#C5E5EC]/10 to-[#E0FAEB]/5 dark:to-[#E0FAEB]/10 rounded-full blur-3xl pointer-events-none -z-10" />
+
+      {/* Smart PWA 1-Tap Install Banner */}
+      <SmartInstallBanner onOpenDownloadAppModal={() => setShowDownloadApp(true)} />
 
       <Header
         onOpenCreateGig={() => {
@@ -203,10 +294,6 @@ const MainLayout: React.FC = () => {
           setCurrentTab('ADMIN');
         }}
         onOpenDownloadApp={() => setShowDownloadApp(true)}
-        onOpenLeaderboard={() => {
-          selectGig(null);
-          setCurrentTab('LEADERBOARD');
-        }}
         onOpenMarketplace={() => {
           selectGig(null);
           setCurrentTab('MARKETPLACE');
@@ -219,6 +306,7 @@ const MainLayout: React.FC = () => {
         onOpenEloModal={() => setShowEloModal(true)}
         onOpenVietQrScanner={() => setShowVietQrScanner(true)}
         onOpenPaymentGateway={() => setShowPaymentGateway(true)}
+        onSelectGigDetail={handleOpenGigDetail}
       />
 
       {/* Global Realtime Maintenance Status Bar for Admin */}
@@ -255,73 +343,123 @@ const MainLayout: React.FC = () => {
       )}
 
       <main className="flex-1 w-full max-w-7xl mx-auto pb-20">
-        {renderContent()}
+        <ErrorBoundary>
+          <Suspense fallback={<ScreenLoadingSpinner label="Đang tải giao diện..." />}>
+            {renderContent()}
+          </Suspense>
+        </ErrorBoundary>
       </main>
 
       <BottomNav currentTab={currentTab} onSelectTab={handleSelectTab} />
 
-      {/* Global Dialogs & Modals */}
-      <NfcCccdScanDialog
-        isOpen={showNfcModal}
-        onClose={() => setShowNfcModal(false)}
-        onContinueToFaceLiveness={() => setShowFaceModal(true)}
-      />
+      {/* Global Dialogs & Modals - Lazy loaded on-demand to minimize initial bundle size */}
+      {showNfcModal && (
+        <Suspense fallback={null}>
+          <NfcCccdScanDialog
+            isOpen={showNfcModal}
+            onClose={() => setShowNfcModal(false)}
+            onContinueToFaceLiveness={() => setShowFaceModal(true)}
+          />
+        </Suspense>
+      )}
 
-      <FaceLivenessDialog
-        isOpen={showFaceModal}
-        onClose={() => setShowFaceModal(false)}
-      />
+      {showFaceModal && (
+        <Suspense fallback={null}>
+          <FaceLivenessDialog
+            isOpen={showFaceModal}
+            onClose={() => setShowFaceModal(false)}
+          />
+        </Suspense>
+      )}
 
-      <StudentSsoDialog
-        isOpen={showSsoModal}
-        onClose={() => setShowSsoModal(false)}
-      />
+      {showSsoModal && (
+        <Suspense fallback={null}>
+          <StudentSsoDialog
+            isOpen={showSsoModal}
+            onClose={() => setShowSsoModal(false)}
+          />
+        </Suspense>
+      )}
 
-      <DownloadAppDialog
-        isOpen={showDownloadApp}
-        onClose={() => setShowDownloadApp(false)}
-      />
+      {showDownloadApp && (
+        <Suspense fallback={null}>
+          <DownloadAppDialog
+            isOpen={showDownloadApp}
+            onClose={() => setShowDownloadApp(false)}
+          />
+        </Suspense>
+      )}
 
-      <FcmPushNotificationModal
-        isOpen={showFcmPush}
-        onClose={() => setShowFcmPush(false)}
-      />
+      {showFcmPush && (
+        <Suspense fallback={null}>
+          <FcmPushNotificationModal
+            isOpen={showFcmPush}
+            onClose={() => setShowFcmPush(false)}
+          />
+        </Suspense>
+      )}
 
-      <StudentEloModal
-        isOpen={showEloModal}
-        onClose={() => setShowEloModal(false)}
-      />
+      {showEloModal && (
+        <Suspense fallback={null}>
+          <StudentEloModal
+            isOpen={showEloModal}
+            onClose={() => setShowEloModal(false)}
+          />
+        </Suspense>
+      )}
 
-      <VietQrOpenApiAutoScanner
-        isOpen={showVietQrScanner}
-        onClose={() => setShowVietQrScanner(false)}
-      />
+      {showVietQrScanner && (
+        <Suspense fallback={null}>
+          <VietQrOpenApiAutoScanner
+            isOpen={showVietQrScanner}
+            onClose={() => setShowVietQrScanner(false)}
+          />
+        </Suspense>
+      )}
 
-      <MoMoZaloPayGatewayModal
-        isOpen={showPaymentGateway}
-        onClose={() => setShowPaymentGateway(false)}
-      />
+      {showPaymentGateway && (
+        <Suspense fallback={null}>
+          <MoMoZaloPayGatewayModal
+            isOpen={showPaymentGateway}
+            onClose={() => setShowPaymentGateway(false)}
+          />
+        </Suspense>
+      )}
 
-      <GeminiVisionStudentIdModal
-        isOpen={showGeminiVision}
-        onClose={() => setShowGeminiVision(false)}
-      />
+      {showGeminiVision && (
+        <Suspense fallback={null}>
+          <GeminiVisionStudentIdModal
+            isOpen={showGeminiVision}
+            onClose={() => setShowGeminiVision(false)}
+          />
+        </Suspense>
+      )}
 
-      <BlockchainProofModal
-        isOpen={showBlockchainProof}
-        onClose={() => setShowBlockchainProof(false)}
-        gigId={currentSelectedGig?.id || ''}
-      />
+      {showBlockchainProof && (
+        <Suspense fallback={null}>
+          <BlockchainProofModal
+            isOpen={showBlockchainProof}
+            onClose={() => setShowBlockchainProof(false)}
+            gigId={currentSelectedGig?.id || ''}
+          />
+        </Suspense>
+      )}
 
-      <VoipCallOverlay />
+      {activeVoipCall && <VoipCallOverlay />}
+
+      {/* Floating toast notification banner */}
+      <GamificationBanner />
+
     </div>
   );
 };
 
 export default function App() {
   return (
-    <GigMeProvider>
-      <MainLayout />
-    </GigMeProvider>
+    <ErrorBoundary>
+      <GigMeProvider>
+        <MainLayout />
+      </GigMeProvider>
+    </ErrorBoundary>
   );
 }

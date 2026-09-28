@@ -66,7 +66,7 @@ export interface UserEntity {
   isBusinessAccount: boolean; // GigMe for Business
   businessName: string;
   businessTaxId: string;
-  trustScore: number; // Thang điểm tín dụng 300 - 850
+  trustScore: number; // Thang điểm uy tín 0 - 100 (Tối đa 100, nếu max thì không cộng thêm)
   notificationSound: 'DING_DEFAULT' | 'CASH_COUNT' | 'BANK_TING' | 'SOFT_VIBRATE';
   connectedMoMo: string;
   connectedZaloPay: string;
@@ -86,10 +86,11 @@ export interface UserEntity {
   badges: string;
   isLocked: boolean;
   createdAt?: number; // Thời điểm tạo tài khoản (timestamp)
+  onlineSeconds?: number; // Thời gian online tích lũy (giây)
+  isForceWithdrawOnly?: boolean; // Bị khóa tính năng, ép rút tiền do vượt trần 200 triệu
   isKycVerified?: boolean;
-  microLoanCreditLimit?: number;
   friendIds?: string[]; // Danh sách ID bạn bè kết nối qua ID 9 số
-  eloRating?: number; // Thang ELO sinh viên (1200 -> 2500+)
+  eloRating?: number; // Thang ELO sinh viên (khởi đầu 200 -> 2500+)
   eloTier?: 'BRONZE' | 'SILVER' | 'GOLD' | 'PLATINUM' | 'DIAMOND' | 'CHALLENGER';
   winStreak?: number; // Chuỗi đơn 5 sao liên tiếp
   studentBadges?: string[]; // Danh sách huy hiệu vinh danh ELO
@@ -337,7 +338,6 @@ export interface WalletTransactionEntity {
     | 'EWALLET_DEPOSIT'
     | 'EWALLET_WITHDRAW'
     | 'ADMIN_REFUND'
-    | 'LOAN_DISBURSE'
     | 'REWARD_EARNED'
     | 'INCOME'
     | 'EXPENSE';
@@ -354,6 +354,9 @@ export interface WalletTransactionEntity {
   note?: string;
   timestamp: number;
   isSuccess: boolean;
+  status?: 'PENDING' | 'APPROVED' | 'COMPLETED' | 'REJECTED';
+  rejectionReason?: string;
+  approvedAt?: number;
 }
 
 export interface SafeWalkSessionEntity {
@@ -392,6 +395,18 @@ export interface UiNotification {
   message: string;
   isDingSound?: boolean;
   isCelebration?: boolean;
+}
+
+export interface FirestoreNotificationEntity {
+  id: string;
+  title: string;
+  message: string;
+  type: 'NEW_GIG' | 'STATUS_UPDATE' | 'INFO';
+  gigId?: string;
+  gigTitle?: string;
+  status?: string;
+  userId?: string;
+  createdAt: number;
 }
 
 export interface AiRecognitionResult {

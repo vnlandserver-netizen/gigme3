@@ -70,6 +70,23 @@
         "isSuccess": { "type": "boolean" }
       },
       "required": ["id", "userId", "type", "amount", "timestamp"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "Real-time notification for new gigs and status updates",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string", "maxLength": 200 },
+        "message": { "type": "string", "maxLength": 1000 },
+        "type": { "type": "string", "enum": ["NEW_GIG", "STATUS_UPDATE", "INFO"] },
+        "gigId": { "type": "string", "maxLength": 100 },
+        "gigTitle": { "type": "string", "maxLength": 200 },
+        "status": { "type": "string", "maxLength": 50 },
+        "userId": { "type": "string", "maxLength": 100 },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "title", "message", "type", "createdAt"]
     }
   },
   "firestore": {
@@ -88,6 +105,10 @@
     "/transactions/{transactionId}": {
       "schema": "WalletTransaction",
       "description": "User wallet transaction histories"
+    },
+    "/notifications/{notificationId}": {
+      "schema": "Notification",
+      "description": "Real-time notifications collection for new gigs and status updates"
     }
   }
 }

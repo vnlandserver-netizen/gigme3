@@ -17,6 +17,7 @@ import {
 import { GigEntity } from '../types';
 import { useGigMe } from '../context/GigMeContext';
 import { validateSecurityToken } from '../utils/securityTokens';
+import { triggerHaptic } from '../utils/haptics';
 
 interface MultiWorkerCheckInModalProps {
   isOpen: boolean;
@@ -54,31 +55,38 @@ export const MultiWorkerCheckInModal: React.FC<MultiWorkerCheckInModalProps> = (
   const secretCode = gig.checkInSecretCode || '';
 
   const handleJoin = () => {
+    triggerHaptic('medium');
     joinMultiWorkerGig(gig.id);
   };
 
   const handleManualCheckIn = () => {
     if (!enteredCode.trim()) {
+      triggerHaptic('error');
       showNotification('Chưa nhập mã', 'Vui lòng nhập mã bảo mật điểm danh từ người thuê.');
       return;
     }
+    triggerHaptic('success');
     checkInMultiWorker(gig.id, enteredCode.trim());
     setEnteredCode('');
   };
 
   const handleSimulateQrScan = () => {
     if (!secretCode) {
+      triggerHaptic('error');
       showNotification('Chưa có mã', 'Chủ việc chưa kích hoạt mã bảo mật QR cho ca làm này.');
       return;
     }
+    triggerHaptic('light');
     setIsScanningSimulation(true);
     setTimeout(() => {
+      triggerHaptic('success');
       checkInMultiWorker(gig.id, secretCode);
       setIsScanningSimulation(false);
     }, 900);
   };
 
   const handlePayoutAll = () => {
+    triggerHaptic('escrow');
     payoutMultiWorkers(gig.id);
   };
 

@@ -24,6 +24,16 @@ interface DatabaseSchema {
   marketplace: any[];
   transactions: any[];
   safewalk: any[];
+  bankBotConfig?: {
+    bankName: string;
+    bankCode: string;
+    accountNumber: string;
+    accountHolder: string;
+    secretKey: string;
+    telegramBotToken: string;
+    telegramChatId: string;
+    enabled: boolean;
+  };
 }
 
 function ensureDbExists(): DatabaseSchema {
@@ -226,7 +236,7 @@ function ensureDbExists(): DatabaseSchema {
       const initial: DatabaseSchema = {
         users: [
           {
-            id: 'admin_root',
+            id: '000000000',
             name: 'Ban Quản Trị GigMe',
             email: 'admin@admin.vn',
             phone: '0909120918',
@@ -288,7 +298,7 @@ function ensureDbExists(): DatabaseSchema {
             isBusinessAccount: false,
             businessName: '',
             businessTaxId: '',
-            trustScore: 780,
+            trustScore: 92,
             eloRating: 1450,
             eloTier: 'SILVER',
             winStreak: 3,
@@ -375,10 +385,21 @@ function ensureDbExists(): DatabaseSchema {
       });
       writeDb(parsed);
     }
-    const adminExists = parsed.users.some((u: any) => u.id === 'admin_root');
-    if (!adminExists) {
+    // Ensure there is only 1 Master Admin account (id: 000000000) and consolidate any admin_root
+    const hasAdminRoot = parsed.users.some((u: any) => u.id === 'admin_root');
+    const hasAdmin000 = parsed.users.some((u: any) => u.id === '000000000');
+    if (hasAdminRoot && hasAdmin000) {
+      parsed.users = parsed.users.filter((u: any) => u.id !== 'admin_root');
+      writeDb(parsed);
+    } else if (hasAdminRoot && !hasAdmin000) {
+      const adminRootUser = parsed.users.find((u: any) => u.id === 'admin_root');
+      if (adminRootUser) {
+        adminRootUser.id = '000000000';
+      }
+      writeDb(parsed);
+    } else if (!hasAdmin000) {
       parsed.users.push({
-        id: 'admin_root',
+        id: '000000000',
         name: 'Ban Quản Trị GigMe',
         email: 'admin@admin.vn',
         phone: '0909120918',
@@ -397,7 +418,7 @@ function ensureDbExists(): DatabaseSchema {
         isBusinessAccount: false,
         businessName: '',
         businessTaxId: '',
-        trustScore: 850,
+        trustScore: 100,
         eloRating: 2000,
         eloTier: 'DIAMOND',
         winStreak: 10,
@@ -414,7 +435,7 @@ function ensureDbExists(): DatabaseSchema {
         onTimeRate: 100,
         postedGigsCount: 10,
         totalSpent: 0,
-        walletBalance: 10000000,
+        walletBalance: 0,
         escrowLockedBalance: 0,
         securityPin: '123456',
         badges: 'Quản Trị Viên Tối Cao',
@@ -529,6 +550,19 @@ function ensureDbExists(): DatabaseSchema {
       ];
       writeDb(parsed);
     }
+    if (!parsed.bankBotConfig) {
+      parsed.bankBotConfig = {
+        bankName: 'MBBank',
+        bankCode: 'MB',
+        accountNumber: '0909120918',
+        accountHolder: 'NGUYEN VAN AN',
+        secretKey: 'gigme_secret_bot_2026',
+        telegramBotToken: '',
+        telegramChatId: '',
+        enabled: true,
+      };
+      writeDb(parsed);
+    }
     return parsed;
   } catch (err) {
     console.error('Error ensuring DB exists:', err);
@@ -575,8 +609,99 @@ function getGemini(): GoogleGenAI | null {
   return geminiClient;
 }
 
+// Client IP extractor
+const getClientIp = (req: Request): string => {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (typeof forwarded === 'string') {
+    return forwarded.split(',')[0].trim();
+  }
+  return req.socket.remoteAddress || '127.0.0.1';
+};
+
+// Security: User Data Sanitizer (Strip cleartext passwords & securityPin from responses)
+function sanitizeUser(user: any) {
+  if (!user || typeof user !== 'object') return user;
+  const { password, securityPin, ...safeUser } = user;
+  return safeUser;
+}
+
+function sanitizeUsers(users: any[]) {
+  if (!Array.isArray(users)) return [];
+  return users.map(sanitizeUser);
+}
+
+// In-Memory Sliding-Window Rate Limiting Engine
+interface RateLimitConfig {
+  windowMs: number;
+  max: number;
+  message: string;
+}
+
+const rateLimitBuckets = new Map<string, Map<string, number[]>>();
+
+function createRateLimiter(bucketName: string, config: RateLimitConfig) {
+  if (!rateLimitBuckets.has(bucketName)) {
+    rateLimitBuckets.set(bucketName, new Map<string, number[]>());
+  }
+  const bucket = rateLimitBuckets.get(bucketName)!;
+
+  return (req: Request, res: Response, next: () => void) => {
+    const ip = getClientIp(req);
+    const now = Date.now();
+    const timestamps = bucket.get(ip) || [];
+
+    // Filter timestamps within current sliding window
+    const validTimestamps = timestamps.filter((t) => now - t < config.windowMs);
+
+    if (validTimestamps.length >= config.max) {
+      const oldest = validTimestamps[0];
+      const retryAfterSec = Math.max(1, Math.ceil((oldest + config.windowMs - now) / 1000));
+      res.setHeader('Retry-After', retryAfterSec);
+      return res.status(429).json({
+        error: config.message,
+        retryAfter: retryAfterSec,
+      });
+    }
+
+    validTimestamps.push(now);
+    bucket.set(ip, validTimestamps);
+    next();
+  };
+}
+
+// 1. Rate limiter for login (Max 10 requests per 60s per IP)
+const loginRateLimiter = createRateLimiter('login', {
+  windowMs: 60 * 1000,
+  max: 10,
+  message: 'Bạn đã đăng nhập quá nhiều lần từ IP này. Vui lòng chờ 1 phút trước khi thử lại!',
+});
+
+// 2. Rate limiter for SMS MO / OTP requests (Max 5 requests per 120s per IP)
+const smsRateLimiter = createRateLimiter('sms', {
+  windowMs: 120 * 1000,
+  max: 5,
+  message: 'Bạn đã yêu cầu gửi SMS/OTP quá thường xuyên. Vui lòng chờ 2 phút trước khi gửi lại!',
+});
+
+// 3. Rate limiter for AI chat requests (Max 20 requests per 60s per IP)
+const aiChatRateLimiter = createRateLimiter('aiChat', {
+  windowMs: 60 * 1000,
+  max: 20,
+  message: 'Tần suất gửi tin nhắn tới AI quá nhanh. Vui lòng chậm lại vài giây!',
+});
+
 async function startServer() {
   const app = express();
+
+  // Security Headers Middleware
+  app.use((_req: Request, res: Response, next: () => void) => {
+    res.removeHeader('X-Powered-By');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-XSS-Protection', '1; mode=block');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    next();
+  });
+
   app.use(cors());
   app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ extended: true, limit: '50mb' }));
@@ -694,8 +819,8 @@ async function startServer() {
     }
   };
 
-  // 1. Tạo yêu cầu xác thực MO SMS
-  app.post('/api/sms/mo-request', (req: Request, res: Response) => {
+  // 1. Tạo yêu cầu xác thực MO SMS (Đã áp dụng Rate Limiting)
+  app.post('/api/sms/mo-request', smsRateLimiter, (req: Request, res: Response) => {
     const { phone, shortcode = '8077', keyword = 'XACTHUC' } = req.body || {};
     const cleanPhone = (phone || '').toString().trim();
     const cleanKeyword = (keyword || 'XACTHUC').toString().trim().toUpperCase();
@@ -826,7 +951,7 @@ async function startServer() {
     });
   });
 
-  app.post('/api/auth/send-otp', (req: Request, res: Response) => {
+  app.post('/api/auth/send-otp', smsRateLimiter, (req: Request, res: Response) => {
     const { contact } = req.body;
     const trimmed = (contact || '').trim().toLowerCase();
     if (!trimmed) {
@@ -949,12 +1074,27 @@ async function startServer() {
     return apkPath;
   };
 
-  app.get('/api/download/gigme.apk', (_req: Request, res: Response) => {
-    const apkPath = ensureApkFile();
-    res.setHeader('Content-Type', 'application/vnd.android.package-archive');
-    res.setHeader('Content-Disposition', 'attachment; filename="Gigme.apk"');
-    res.sendFile(apkPath);
-  });
+  const sendApkResponse = (_req: Request, res: Response) => {
+    try {
+      const apkPath = ensureApkFile();
+      if (!fs.existsSync(apkPath)) {
+        return res.status(404).send('APK not found');
+      }
+      const stat = fs.statSync(apkPath);
+      res.setHeader('Content-Type', 'application/vnd.android.package-archive');
+      res.setHeader('Content-Disposition', 'attachment; filename="Gigme.apk"');
+      res.setHeader('Content-Length', stat.size);
+      res.setHeader('Cache-Control', 'no-cache');
+      res.sendFile(apkPath);
+    } catch (err) {
+      res.status(500).send('Error serving APK');
+    }
+  };
+
+  app.get('/api/download/gigme.apk', sendApkResponse);
+  app.get('/downloads/Gigme.apk', sendApkResponse);
+  app.get('/downloads/GigMe-Student-v1.0.apk', sendApkResponse);
+  app.get('/download/apk', sendApkResponse);
 
   // Helper to extract clean client IP
   const getClientIp = (req: Request): string => {
@@ -977,10 +1117,10 @@ async function startServer() {
     });
   });
 
-  // 3. User Authentication & Profile
+  // 3. User Authentication & Profile (Sanitized responses - No cleartext passwords or PINs)
   app.get('/api/users', (_req: Request, res: Response) => {
     const db = ensureDbExists();
-    res.json(db.users);
+    res.json(sanitizeUsers(db.users));
   });
 
   app.post('/api/users/register', (req: Request, res: Response) => {
@@ -1058,14 +1198,18 @@ async function startServer() {
     newUser.email = email;
     if (phone) newUser.phone = phone;
     if (cccd) newUser.cccdNumber = cccd;
+    // Enforce max 100 trustScore
+    if (newUser.trustScore !== undefined) {
+      newUser.trustScore = Math.min(100, Math.max(0, Number(newUser.trustScore) || 0));
+    }
 
     db.users.push(newUser);
     writeDb(db);
-    broadcastSse('user_registered', newUser);
-    res.json({ success: true, user: newUser });
+    broadcastSse('user_registered', sanitizeUser(newUser));
+    res.json({ success: true, user: sanitizeUser(newUser) });
   });
 
-  app.post('/api/users/login', (req: Request, res: Response) => {
+  app.post('/api/users/login', loginRateLimiter, (req: Request, res: Response) => {
     const { contact, password } = req.body;
     const db = ensureDbExists();
     const trimmedContact = (contact || '').trim().toLowerCase();
@@ -1083,13 +1227,17 @@ async function startServer() {
     if (user.isLocked) {
       return res.status(403).json({ error: 'Tài khoản đã bị tạm khóa' });
     }
-    res.json({ success: true, user });
+    res.json({ success: true, user: sanitizeUser(user) });
   });
 
   app.put('/api/users/:id', (req: Request, res: Response) => {
     const { id } = req.params;
     const updates = req.body;
     const db = ensureDbExists();
+    // Clamp trustScore to max 100 if present
+    if (updates.trustScore !== undefined) {
+      updates.trustScore = Math.min(100, Math.max(0, Number(updates.trustScore) || 0));
+    }
     const index = db.users.findIndex((u: any) => u.id === id);
     if (index === -1) {
       db.users.push({ id, ...updates });
@@ -1098,8 +1246,90 @@ async function startServer() {
     }
     writeDb(db);
     const updatedUser = index === -1 ? db.users[db.users.length - 1] : db.users[index];
-    broadcastSse('user_updated', updatedUser);
-    res.json({ success: true, user: updatedUser });
+    broadcastSse('user_updated', sanitizeUser(updatedUser));
+    res.json({ success: true, user: sanitizeUser(updatedUser) });
+  });
+
+  app.delete('/api/users/:id', (req: Request, res: Response) => {
+    const { id } = req.params;
+    if (id === '000000000' || id === 'admin_root') {
+      return res.status(403).json({ error: 'Không thể xóa tài khoản Quản trị viên tối cao!' });
+    }
+    const db = ensureDbExists();
+    db.users = (db.users || []).filter((u: any) => u.id !== id);
+
+    // Dọn sạch hoàn toàn các dữ liệu rác liên quan đến tài khoản này
+    if (Array.isArray(db.gigs)) {
+      db.gigs = db.gigs
+        .filter((g: any) => g.clientId !== id)
+        .map((g: any) => {
+          if (g.freelancerId === id) {
+            return {
+              ...g,
+              freelancerId: null,
+              freelancerName: null,
+              status: g.status === 'IN_PROGRESS' || g.status === 'SUBMITTED' ? 'OPEN' : g.status,
+            };
+          }
+          return g;
+        });
+    }
+
+    if (Array.isArray(db.bids)) {
+      db.bids = db.bids.filter((b: any) => b.freelancerId !== id);
+    }
+
+    if (Array.isArray(db.chats)) {
+      db.chats = db.chats.filter((c: any) => c.senderId !== id && c.receiverId !== id);
+    }
+
+    if (Array.isArray(db.transactions)) {
+      db.transactions = db.transactions.filter((t: any) => t.userId !== id);
+    }
+
+    writeDb(db);
+    broadcastSse('user_deleted', { id });
+    res.json({ success: true, id });
+  });
+
+  // Xóa sạch toàn bộ dữ liệu người dùng [trừ Admin duy nhất 000000000]
+  app.post('/api/users/purge-non-admin', (_req: Request, res: Response) => {
+    const db = ensureDbExists();
+    // Giữ duy nhất 1 tài khoản Admin tối cao (000000000 / admin@admin.vn)
+    db.users = db.users.filter((u: any) => u.id === '000000000' || u.email === 'admin@admin.vn');
+    if (db.users.length === 0) {
+      db.users.push({
+        id: '000000000',
+        name: 'Ban Quản Trị GigMe',
+        email: 'admin@admin.vn',
+        phone: '0909120918',
+        password: 'admin1507',
+        gender: 'Khác',
+        birthDate: '01/01/2000',
+        role: 'ADMIN',
+        tier: 'PRO',
+        kycName: 'QUẢN TRỊ VIÊN HỆ THỐNG',
+        isKycApproved: true,
+        isNfcVerified: true,
+        isFaceLivenessPassed: true,
+        isStudentVerified: true,
+        trustScore: 100,
+        eloRating: 2000,
+        eloTier: 'DIAMOND',
+        winStreak: 10,
+        walletBalance: 0,
+        escrowLockedBalance: 0,
+        badges: 'Quản Trị Viên Tối Cao',
+        isLocked: false,
+      });
+    }
+    // Xóa sạch dữ liệu liên quan: việc làm không phải của admin, bids, chats
+    db.gigs = db.gigs.filter((g: any) => g.clientId === '000000000' || g.clientId === 'admin_root');
+    db.bids = [];
+    db.chats = [];
+    writeDb(db);
+    broadcastSse('users_purged', { remaining: db.users.length });
+    res.json({ success: true, count: db.users.length });
   });
 
   // 4. Gigs Management
@@ -1624,7 +1854,7 @@ async function startServer() {
     if (freelancer) {
       freelancer.walletBalance = (Number(freelancer.walletBalance) || 0) + freelancerPayout;
       freelancer.completedGigs = (Number(freelancer.completedGigs) || 0) + 1;
-      freelancer.trustScore = Math.min(850, (Number(freelancer.trustScore) || 0) + 15);
+      freelancer.trustScore = Math.min(100, (Number(freelancer.trustScore) || 0) + 5);
       freelancer.winStreak = (Number(freelancer.winStreak) || 0) + 1;
     }
 
@@ -1694,13 +1924,33 @@ async function startServer() {
     });
   });
 
-  // 8.4 REAL BANKING WEBHOOKS (SEPAY / CASSO / VIETQR AUTO-MATCHER)
+  async function sendTelegramAlert(text: string, config?: any) {
+    try {
+      const token = config?.telegramBotToken || process.env.TELEGRAM_BOT_TOKEN;
+      const chatId = config?.telegramChatId || process.env.TELEGRAM_CHAT_ID;
+      if (!token || !chatId) return;
+
+      await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text,
+          parse_mode: 'HTML',
+        }),
+      });
+    } catch (err) {
+      console.warn('Failed to send Telegram alert:', err);
+    }
+  }
+
+  // 8.4 REAL BANKING WEBHOOKS (SEPAY / CASSO / VIETQR / SELF-HOSTED BOT AUTO-MATCHER)
   function processBankDeposit(
     refCode: string,
     amount: number,
     content: string,
     bankAccount: string,
-    gatewayName: 'SePay' | 'Casso' | 'VietQR' | 'Napas247'
+    gatewayName: 'SePay' | 'Casso' | 'VietQR' | 'Napas247' | 'SelfHostedBot' | string
   ) {
     const db = ensureDbExists();
 
@@ -1777,6 +2027,18 @@ async function startServer() {
         userId: matchedUser.id,
       });
 
+      // Send Telegram Alert to Admin
+      if (db.bankBotConfig?.telegramBotToken && db.bankBotConfig?.telegramChatId) {
+        const alertHtml = `<b>🤖 [GIGME BOT - TỰ ĐỘNG NẠP TIỀN THÀNH CÔNG]</b>\n` +
+          `💰 <b>Số tiền:</b> +${amount.toLocaleString('vi-VN')}đ\n` +
+          `👤 <b>Người nhận:</b> ${matchedUser.name} (${matchedUser.phone || matchedUser.id})\n` +
+          `💳 <b>Số dư mới:</b> ${matchedUser.walletBalance.toLocaleString('vi-VN')}đ\n` +
+          `📝 <b>Nội dung:</b> ${content}\n` +
+          `🏦 <b>Ngân hàng:</b> ${bankAccount}\n` +
+          `🔖 <b>Mã GD:</b> <code>${refCode}</code>`;
+        sendTelegramAlert(alertHtml, db.bankBotConfig);
+      }
+
       return {
         success: true,
         creditedUserId: matchedUser.id,
@@ -1804,6 +2066,16 @@ async function startServer() {
       writeDb(db);
 
       broadcastSse('transaction_saved', unassignedTx);
+
+      // Send Telegram Alert for Unassigned Transaction
+      if (db.bankBotConfig?.telegramBotToken && db.bankBotConfig?.telegramChatId) {
+        const unassignedHtml = `<b>⚠️ [GIGME BOT - BIẾN ĐỘNG CẦN ĐỐI SOÁT]</b>\n` +
+          `💰 <b>Số tiền:</b> +${amount.toLocaleString('vi-VN')}đ\n` +
+          `📝 <b>Nội dung:</b> ${content}\n` +
+          `🏦 <b>Ngân hàng:</b> ${bankAccount}\n` +
+          `❓ <i>Không tìm thấy người dùng khớp với cú pháp trên. Vui lòng vào Admin Dashboard để gán số dư.</i>`;
+        sendTelegramAlert(unassignedHtml, db.bankBotConfig);
+      }
 
       return {
         success: true,
@@ -1903,6 +2175,7 @@ async function startServer() {
   app.get('/api/webhook/status', (_req: Request, res: Response) => {
     const db = ensureDbExists();
     const bankingTxs = db.transactions.filter((t: any) => t.type === 'VIETQR_DEPOSIT');
+    const botConfig = db.bankBotConfig || {};
     res.json({
       status: 'ONLINE',
       webhooks: {
@@ -1914,13 +2187,433 @@ async function startServer() {
           endpoint: '/api/webhook/casso',
           configured: !!process.env.CASSO_SECURE_TOKEN,
         },
+        selfHostedBot: {
+          endpoint: '/api/webhook/bank-bot',
+          configured: !!botConfig.secretKey,
+          enabled: botConfig.enabled !== false,
+        },
+        telegramBot: {
+          endpoint: '/api/webhook/telegram',
+          configured: !!botConfig.telegramBotToken,
+        },
         universal: {
           endpoint: '/api/banking/webhook',
           configured: true,
         },
       },
+      bankBotConfig: botConfig,
       totalBankingTransactions: bankingTxs.length,
       recentTransactions: bankingTxs.slice(0, 5),
+    });
+  });
+
+  // 8.5 SELF-HOSTED BANK BOT / NOTIFICATION PARSER & TELEGRAM ENGINE
+  function parseBankNotificationText(rawText: string) {
+    const text = String(rawText || '').trim();
+    if (!text) return null;
+
+    // 1. Detect Bank
+    let detectedBank = 'Ngân Hàng';
+    const lower = text.toLowerCase();
+    if (lower.includes('vietcombank') || lower.includes('vcb')) detectedBank = 'Vietcombank';
+    else if (lower.includes('mbbank') || lower.includes('mb bank') || lower.includes('quân đội') || lower.includes('quan doi')) detectedBank = 'MBBank';
+    else if (lower.includes('techcombank') || lower.includes('tcb') || lower.includes('kỹ thương') || lower.includes('ky thuong')) detectedBank = 'Techcombank';
+    else if (lower.includes('acb') || lower.includes('á châu')) detectedBank = 'ACB';
+    else if (lower.includes('tpbank') || lower.includes('tpb') || lower.includes('tiên phong')) detectedBank = 'TPBank';
+    else if (lower.includes('vpbank') || lower.includes('vpb') || lower.includes('thịnh vượng')) detectedBank = 'VPBank';
+    else if (lower.includes('bidv')) detectedBank = 'BIDV';
+    else if (lower.includes('agribank') || lower.includes('nông nghiệp')) detectedBank = 'Agribank';
+    else if (lower.includes('vietinbank') || lower.includes('ctg') || lower.includes('công thương')) detectedBank = 'VietinBank';
+    else if (lower.includes('sacombank') || lower.includes('stb')) detectedBank = 'Sacombank';
+    else if (lower.includes('ocb')) detectedBank = 'OCB';
+    else if (lower.includes('hdbank') || lower.includes('hdb')) detectedBank = 'HDBank';
+    else if (lower.includes('momo')) detectedBank = 'MoMo';
+    else if (lower.includes('zalopay')) detectedBank = 'ZaloPay';
+    else if (lower.includes('viettel')) detectedBank = 'Viettel Money';
+
+    // 2. Extract Amount
+    let amount = 0;
+    // Common patterns:
+    // "+50,000VND", "+100.000d", "nhan 50.000d", "GD: +50000", "50,000 VND"
+    const plusMatch = text.match(/(?:\+|\bnhận\b|\bnhan\b|\bgd\s*:?\s*\+?)\s*([0-9]{1,3}(?:[.,][0-9]{3})+|[0-9]{4,10})\s*(?:vnd|vnđ|d|đ)?/i);
+    if (plusMatch && plusMatch[1]) {
+      amount = parseInt(plusMatch[1].replace(/[.,]/g, ''), 10);
+    } else {
+      const currencyMatch = text.match(/([0-9]{1,3}(?:[.,][0-9]{3})+)\s*(?:vnd|vnđ|d|đ)/i);
+      if (currencyMatch && currencyMatch[1]) {
+        amount = parseInt(currencyMatch[1].replace(/[.,]/g, ''), 10);
+      }
+    }
+
+    // 3. Extract Transfer Content
+    let content = text;
+    const ndMatch = text.match(/(?:nd|nội dung|noi dung|lời nhắn|loi nhan|lý do|ly do|content)\s*[:=-]\s*([^\n\r.]+)/i);
+    if (ndMatch && ndMatch[1]) {
+      content = ndMatch[1].trim();
+    } else {
+      const gigmeMatch = text.match(/(GIGME\s+[A-Za-z0-9_]+)/i);
+      if (gigmeMatch && gigmeMatch[1]) {
+        content = gigmeMatch[1].trim();
+      }
+    }
+
+    // 4. Extract Reference code
+    let refCode = `BOT_${Date.now()}`;
+    const refMatch = text.match(/(?:mã gd|ma gd|ref|ft|trace|transid)\s*[:=-]?\s*([A-Za-z0-9_]+)/i);
+    if (refMatch && refMatch[1]) {
+      refCode = refMatch[1];
+    }
+
+    return {
+      bank: detectedBank,
+      amount,
+      content,
+      refCode,
+      rawText: text,
+    };
+  }
+
+  // Get Self-Hosted Bank Bot & System Bank Account Configuration
+  app.get('/api/system/bank-bot-config', (_req: Request, res: Response) => {
+    const db = ensureDbExists();
+    const config = db.bankBotConfig || {
+      bankName: 'MBBank',
+      bankCode: 'MB',
+      accountNumber: '0909120918',
+      accountHolder: 'NGUYEN VAN AN',
+      secretKey: 'gigme_secret_bot_2026',
+      telegramBotToken: '',
+      telegramChatId: '',
+      enabled: true,
+    };
+    res.json({
+      success: true,
+      config,
+      webhookUrl: '/api/webhook/bank-bot',
+      telegramWebhookUrl: '/api/webhook/telegram',
+    });
+  });
+
+  // Save Self-Hosted Bank Bot Configuration
+  app.post('/api/system/bank-bot-config', (req: Request, res: Response) => {
+    const db = ensureDbExists();
+    const newConfig = req.body || {};
+    db.bankBotConfig = {
+      ...(db.bankBotConfig || {}),
+      ...newConfig,
+    };
+    writeDb(db);
+    broadcastSse('bank_bot_config_updated', db.bankBotConfig);
+    res.json({ success: true, config: db.bankBotConfig });
+  });
+
+  // Self-Hosted Bank Bot Webhook (For MacroDroid, Tasker, Python/NodeJS Forwarder)
+  app.post('/api/webhook/bank-bot', (req: Request, res: Response) => {
+    const db = ensureDbExists();
+    const botConfig = db.bankBotConfig || {};
+
+    // Validate Secret Key if configured
+    const incomingSecret =
+      req.headers['x-bot-secret'] ||
+      req.headers['authorization']?.replace(/^Bearer\s+/i, '') ||
+      req.query.secret ||
+      req.body?.secret;
+
+    if (botConfig.secretKey && incomingSecret && incomingSecret !== botConfig.secretKey) {
+      return res.status(401).json({ error: 'Unauthorized: Sai Secret Key của Bank Bot' });
+    }
+
+    let amount = 0;
+    let content = '';
+    let bank = botConfig.bankName || 'Ngân Hàng';
+    let refCode = `BOT_${Date.now()}_${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+
+    if (typeof req.body === 'string') {
+      const parsed = parseBankNotificationText(req.body);
+      if (parsed) {
+        amount = parsed.amount;
+        content = parsed.content;
+        bank = parsed.bank;
+        refCode = parsed.refCode;
+      }
+    } else if (req.body && req.body.text) {
+      const parsed = parseBankNotificationText(req.body.text);
+      if (parsed) {
+        amount = parsed.amount;
+        content = parsed.content;
+        bank = req.body.bank || parsed.bank;
+        refCode = req.body.refCode || parsed.refCode;
+      }
+    } else if (req.body && req.body.amount) {
+      amount = Number(req.body.amount || 0);
+      content = String(req.body.content || req.body.description || req.body.order_info || '').trim();
+      bank = req.body.bank || req.body.bankName || botConfig.bankName || 'Ngân Hàng';
+      refCode = req.body.refCode || req.body.id || refCode;
+    }
+
+    if (amount <= 0) {
+      return res.status(400).json({
+        error: 'Không trích xuất được số tiền hợp lệ (> 0đ) từ thông báo ngân hàng. Hãy kiểm tra định dạng nội dung gửi lên!',
+        received: req.body,
+      });
+    }
+
+    const result = processBankDeposit(refCode, amount, content, bank, 'SelfHostedBot');
+    return res.json({
+      success: true,
+      parsed: { bank, amount, content, refCode },
+      depositResult: result,
+    });
+  });
+
+  // Test Simulation Endpoint for Admin Testing
+  app.post('/api/webhook/bank-bot/test-simulate', (req: Request, res: Response) => {
+    const { notificationText, secret } = req.body || {};
+    if (!notificationText || !String(notificationText).trim()) {
+      return res.status(400).json({ error: 'Vui lòng nhập nội dung thông báo thử nghiệm!' });
+    }
+
+    const parsed = parseBankNotificationText(notificationText);
+    if (!parsed || parsed.amount <= 0) {
+      return res.status(400).json({
+        error: 'Không tìm thấy số tiền hợp lệ trong nội dung thử nghiệm! Ví dụ: "VCB: TK 123 +50,000VND. ND: GIGME 0909120918"',
+        parsed,
+      });
+    }
+
+    const refCode = `TEST_${Date.now()}`;
+    const result = processBankDeposit(refCode, parsed.amount, parsed.content, parsed.bank, 'SelfHostedBot (Mô Phỏng)');
+
+    res.json({
+      success: true,
+      simulated: true,
+      parsed,
+      depositResult: result,
+    });
+  });
+
+  // Telegram Bot Webhook Receiver
+  app.post('/api/webhook/telegram', async (req: Request, res: Response) => {
+    const db = ensureDbExists();
+    const botConfig = db.bankBotConfig || {};
+    const message = req.body?.message;
+    if (!message || !message.text) {
+      return res.json({ ok: true });
+    }
+
+    const text = message.text.trim();
+    const chatId = message.chat?.id;
+
+    const sendReply = async (replyHtml: string) => {
+      if (!botConfig.telegramBotToken) return;
+      try {
+        await fetch(`https://api.telegram.org/bot${botConfig.telegramBotToken}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: replyHtml,
+            parse_mode: 'HTML',
+          }),
+        });
+      } catch (err) {
+        console.warn('Telegram reply error:', err);
+      }
+    };
+
+    if (text.startsWith('/start') || text.startsWith('/help')) {
+      await sendReply(
+        `<b>🤖 Chào mừng đến với GigMe Bank Bot (Self-Hosted 100% Free)!</b>\n\n` +
+        `Các lệnh khả dụng:\n` +
+        `• <code>/status</code>: Báo cáo số dư Admin, tổng người dùng, giao dịch\n` +
+        `• <code>/topup &lt;SĐT/ID&gt; &lt;Số_Tiền&gt;</code>: Nạp tiền trực tiếp cho sinh viên\n` +
+        `• <code>/parse &lt;Nội dung thông báo&gt;</code>: Thử nghiệm bóc tách thông báo ngân hàng\n\n` +
+        `Bạn cũng có thể dán trực tiếp tin nhắn thông báo ngân hàng vào đây để bot tự động khớp lệnh!`
+      );
+      return res.json({ ok: true });
+    }
+
+    if (text.startsWith('/status')) {
+      const adminUser = db.users.find((u: any) => u.role === 'ADMIN' || u.id === '000000000');
+      const totalUsers = db.users.length;
+      const totalGigs = db.gigs.length;
+      const bankingTxs = db.transactions.filter((t: any) => t.type === 'VIETQR_DEPOSIT');
+      await sendReply(
+        `<b>📊 BÁO CÁO HỆ THỐNG GIGME:</b>\n` +
+        `• Tổng tài khoản: <b>${totalUsers}</b>\n` +
+        `• Đơn việc: <b>${totalGigs}</b>\n` +
+        `• Số GD nạp tiền: <b>${bankingTxs.length}</b>\n` +
+        `• Ví Admin: <b>${(adminUser?.walletBalance || 0).toLocaleString('vi-VN')}đ</b>\n` +
+        `• Bot Webhook: 🟢 <b>Sẵn sàng 24/7</b>`
+      );
+      return res.json({ ok: true });
+    }
+
+    if (text.startsWith('/topup')) {
+      const parts = text.split(/\s+/);
+      if (parts.length < 3) {
+        await sendReply(`⚠️ Cú pháp: <code>/topup &lt;SĐT_hoặc_ID&gt; &lt;Số_Tiền&gt;</code>\nVí dụ: <code>/topup 0909120918 50000</code>`);
+        return res.json({ ok: true });
+      }
+      const targetIdOrPhone = parts[1];
+      const amount = parseInt(parts[2].replace(/\D/g, ''), 10);
+      if (!amount || amount <= 0) {
+        await sendReply(`❌ Số tiền không hợp lệ!`);
+        return res.json({ ok: true });
+      }
+
+      const ref = `TELEGRAM_${Date.now()}`;
+      const result = processBankDeposit(ref, amount, `GIGME ${targetIdOrPhone}`, botConfig.bankName || 'Telegram Admin Bot', 'SelfHostedBot');
+      if (result.success && !result.unassigned) {
+        await sendReply(`✅ Đã nạp thành công <b>+${amount.toLocaleString('vi-VN')}đ</b> cho <b>${result.creditedUserName}</b> (ID: ${result.creditedUserId}).\nSố dư mới: <b>${result.newBalance.toLocaleString('vi-VN')}đ</b>`);
+      } else {
+        await sendReply(`⚠️ Đã ghi nhận giao dịch nhưng không tìm thấy sinh viên khớp với "<b>${targetIdOrPhone}</b>". Giao dịch lưu vào hàng đợi đối soát.`);
+      }
+      return res.json({ ok: true });
+    }
+
+    if (text.startsWith('/parse')) {
+      const raw = text.replace('/parse', '').trim();
+      const parsed = parseBankNotificationText(raw);
+      await sendReply(
+        `<b>🔍 Kết quả phân tích thông báo:</b>\n` +
+        `• Ngân hàng: <b>${parsed?.bank}</b>\n` +
+        `• Số tiền: <b>${parsed?.amount ? parsed.amount.toLocaleString('vi-VN') + 'đ' : '0đ'}</b>\n` +
+        `• Nội dung: <code>${parsed?.content}</code>\n` +
+        `• Mã GD: <code>${parsed?.refCode}</code>`
+      );
+      return res.json({ ok: true });
+    }
+
+    // Auto-detect bank notification pasted into chat:
+    if (text.includes('GIGME') || text.includes('VND') || text.includes('TK')) {
+      const parsed = parseBankNotificationText(text);
+      if (parsed && parsed.amount > 0) {
+        const result = processBankDeposit(parsed.refCode, parsed.amount, parsed.content, parsed.bank, 'SelfHostedBot');
+        if (result.success && !result.unassigned) {
+          await sendReply(`⚡ <b>Tự động khớp lệnh thành công!</b>\nĐã cộng <b>+${parsed.amount.toLocaleString('vi-VN')}đ</b> cho <b>${result.creditedUserName}</b> (ID: ${result.creditedUserId}).`);
+        } else {
+          await sendReply(`⚠️ Đã phát hiện biến động <b>${parsed.amount.toLocaleString('vi-VN')}đ</b> nhưng nội dung "${parsed.content}" chưa khớp tài khoản nào.`);
+        }
+        return res.json({ ok: true });
+      }
+    }
+
+    return res.json({ ok: true });
+  });
+
+  // Test Telegram Connection Endpoint for Admin
+  app.post('/api/system/telegram-test', async (req: Request, res: Response) => {
+    const db = ensureDbExists();
+    const botConfig = db.bankBotConfig || {};
+    const token = req.body?.telegramBotToken || botConfig.telegramBotToken || process.env.TELEGRAM_BOT_TOKEN;
+    const chatId = req.body?.telegramChatId || botConfig.telegramChatId || process.env.TELEGRAM_CHAT_ID;
+
+    if (!token || !chatId) {
+      return res.status(400).json({
+        error: 'Vui lòng cung cấp cả Telegram Bot Token và Telegram Chat ID để kiểm tra!',
+      });
+    }
+
+    try {
+      const testMessage =
+        `<b>🤖 [GIGME BANK BOT - KẾT NỐI THÀNH CÔNG]</b>\n\n` +
+        `✅ Bot Telegram đã liên kết 100% với máy chủ GigMe!\n` +
+        `🏦 <b>Ngân hàng nhận:</b> ${botConfig.bankName || 'MBBank'} (${botConfig.accountNumber || '0909120918'})\n` +
+        `⏰ <b>Thời gian:</b> ${new Date().toLocaleString('vi-VN')}\n` +
+        `⚡ Hệ thống sẵn sàng tự động gửi tin nhắn báo động biến động số dư và tiếp nhận lệnh <code>/topup</code> tức thì.`;
+
+      const tgRes = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: testMessage,
+          parse_mode: 'HTML',
+        }),
+      });
+
+      const tgData: any = await tgRes.json();
+      if (!tgData.ok) {
+        return res.status(400).json({
+          error: `Telegram báo lỗi: ${tgData.description || 'Không gửi được tin nhắn'} (Kiểm tra lại Token hoặc Chat ID)`,
+          telegramResponse: tgData,
+        });
+      }
+
+      return res.json({
+        success: true,
+        message: 'Đã gửi tin nhắn thử nghiệm thành công tới Telegram của bạn!',
+        result: tgData.result,
+      });
+    } catch (err: any) {
+      return res.status(500).json({
+        error: `Lỗi kết nối tới Telegram API: ${err?.message || 'Không thể truy cập'}`,
+      });
+    }
+  });
+
+  // Manual Matching & Assigning Unassigned Deposit Transactions
+  app.post('/api/system/bank-bot/assign-tx', (req: Request, res: Response) => {
+    const db = ensureDbExists();
+    const { txId, targetUserIdOrPhone } = req.body || {};
+
+    if (!txId || !targetUserIdOrPhone) {
+      return res.status(400).json({ error: 'Thiếu mã giao dịch (txId) hoặc thông tin người nhận!' });
+    }
+
+    const tx = db.transactions.find((t: any) => t.id === txId);
+    if (!tx) {
+      return res.status(404).json({ error: 'Không tìm thấy giao dịch này trong hệ thống!' });
+    }
+
+    const keyword = String(targetUserIdOrPhone).trim().toUpperCase();
+    const targetUser = db.users.find((u: any) =>
+      (u.phone && u.phone === keyword) ||
+      (u.id && u.id === keyword) ||
+      (u.id && u.id.replace('user_', '').toUpperCase() === keyword) ||
+      (u.email && u.email.toUpperCase().includes(keyword))
+    );
+
+    if (!targetUser) {
+      return res.status(404).json({
+        error: `Không tìm thấy sinh viên nào khớp với SĐT hoặc ID "${targetUserIdOrPhone}"!`,
+      });
+    }
+
+    // Credit balance
+    const depositAmount = Number(tx.amount) || 0;
+    targetUser.walletBalance = (Number(targetUser.walletBalance) || 0) + depositAmount;
+
+    // Update tx details
+    tx.userId = targetUser.id;
+    tx.title = `Nạp tiền Webhook (Admin Đã Đối Soát Thủ Công)`;
+    tx.subtitle = `Đã gán cho: ${targetUser.name} (${targetUser.phone || targetUser.id})`;
+    tx.isSuccess = true;
+
+    writeDb(db);
+
+    broadcastSse('user_updated', targetUser);
+    broadcastSse('transaction_saved', tx);
+
+    // Push notification to user
+    broadcastSse('push_notification', {
+      title: `💰 Nạp tiền thành công +${depositAmount.toLocaleString('vi-VN')}đ`,
+      body: `Quản trị viên đã đối soát giao dịch và cộng tiền vào ví GigMe của bạn. Số dư mới: ${targetUser.walletBalance.toLocaleString('vi-VN')}đ`,
+      type: 'WALLET_DEPOSIT',
+      userId: targetUser.id,
+    });
+
+    return res.json({
+      success: true,
+      message: `Đã đối soát và cộng thành công ${depositAmount.toLocaleString('vi-VN')}đ vào ví sinh viên ${targetUser.name}!`,
+      creditedUser: {
+        id: targetUser.id,
+        name: targetUser.name,
+        phone: targetUser.phone,
+        newBalance: targetUser.walletBalance,
+      },
+      transaction: tx,
     });
   });
 
@@ -2024,14 +2717,17 @@ Mô tả: ${description}
 Danh mục: ${category}`;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.8-flash',
         contents: prompt,
       });
 
       const text = response.text || '';
-      const cleanJson = text.replace(/```json/g, '').replace(/```/g, '').trim();
-      const result = JSON.parse(cleanJson);
-      return res.json(result);
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const result = JSON.parse(jsonMatch[0]);
+        return res.json(result);
+      }
+      throw new Error('No valid JSON extracted from Gemini response');
     } catch (err: any) {
       console.warn('Gemini estimation fallback:', err?.message);
       return res.json({
@@ -2077,7 +2773,7 @@ Phân tích hình ảnh thẻ sinh viên được gửi kèm và trích xuất c
 Chỉ trả về JSON thuần túy, không thêm markdown.`;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.8-flash',
         contents: [
           prompt,
           {
@@ -2090,9 +2786,12 @@ Chỉ trả về JSON thuần túy, không thêm markdown.`;
       });
 
       const text = response.text || '';
-      const cleanJson = text.replace(/```json/g, '').replace(/```/g, '').trim();
-      const parsed = JSON.parse(cleanJson);
-      return res.json({ success: true, data: parsed });
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        return res.json({ success: true, data: parsed });
+      }
+      throw new Error('No valid JSON extracted from Gemini OCR response');
     } catch (err: any) {
       console.warn('Gemini OCR fallback:', err?.message);
       return res.json({
@@ -2126,8 +2825,61 @@ Chỉ trả về JSON thuần túy, không thêm markdown.`;
 4. Tranh chấp: Có Trọng tài Campus đối soát minh bạch trong 24 giờ.`;
   }
 
-  // 10.2 GigMe 24/7 Smart Campus & Escrow Chat Assistant (Powered by Groq + skill.md + Gemini Fallback)
-  app.post('/api/gemini/chat-assistant', async (req: Request, res: Response) => {
+  // Helper to generate intelligent local response based on skill.md when external APIs are unavailable
+  function generateSmartLocalResponse(msg: string): string {
+    const text = (msg || '').toLowerCase();
+
+    if (text.includes('escrow') || text.includes('ký quỹ') || text.includes('giải ngân') || text.includes('bùng cọc') || text.includes('quỵt') || text.includes('chưa trả tiền') || text.includes('tiền công')) {
+      return `Chào bạn! Về quy chế Smart Escrow & Bảo đảm tiền công:
+1. Tiền công của công việc đã được người thuê ký quỹ khóa an toàn 100% trong quỹ Smart Escrow ngay từ khi tạo việc. Người thuê không thể tự ý rút lại.
+2. Khi bạn hoàn thành công việc: Hãy bấm "Hoàn thành" và tải lên ảnh/video minh chứng nghiệm thu (Proof of Work).
+3. Người thuê kiểm tra và bấm "Nghiệm thu & Giải ngân" -> tiền về ví bạn tức thì.
+4. Cơ chế bảo vệ tự động: Nếu người thuê bận hoặc không phản hồi sau 24 giờ (và không có khiếu nại), hệ thống Smart Escrow sẽ tự động giải ngân toàn bộ 100% tiền vào ví của bạn. Bạn hoàn toàn yên tâm nhé!`;
+    }
+
+    if (text.includes('nạp tiền') || text.includes('rút tiền') || text.includes('vietqr') || text.includes('napas') || text.includes('ngân hàng') || text.includes('ví')) {
+      return `Chào bạn! Về Nạp & Rút tiền trên GigMe:
+• Nạp tiền VietQR: Vào tab "Ví Tiền" -> "Nạp Tiền" -> Quét mã QR ngân hàng hoặc chuyển khoản đúng cú pháp. Tiền vào ví tự động sau 1-3 giây (tối đa 10.000.000đ/lần, giãn cách 1 giờ, tối đa 30.000.000đ/ngày).
+• Rút tiền Napas 24/7: Vào "Ví Tiền" -> "Rút Tiền" -> Nhập số tài khoản ngân hàng và số tiền. Tiền về tài khoản ngay lập tức, hoàn toàn miễn phí 0đ!`;
+    }
+
+    if (text.includes('hủy việc') || text.includes('hủy kèo') || text.includes('bận thi') || text.includes('bỏ việc')) {
+      return `Chào bạn! Về quy định hủy nhận việc:
+• Hủy sớm (trước giờ hẹn > 2 tiếng): Bạn vào chi tiết công việc bấm "Hủy nhận việc" và nhắn tin lịch sự xin lỗi người thuê. Trường hợp hủy sớm có lý do chính đáng sẽ không bị phạt nặng.
+• Hủy gấp (<30 phút) hoặc bỏ hẹn (No-show): Điểm ELO sẽ bị trừ (-50 ELO) và tạm khóa quyền nhận việc hỏa tốc 24 giờ để đảm bảo uy tín trên sàn.`;
+    }
+
+    if (text.includes('tranh chấp') || text.includes('khiếu nại') || text.includes('lừa đảo') || text.includes('báo cáo') || text.includes('trọng tài')) {
+      return `Chào bạn! Về giải quyết khiếu nại & tranh chấp:
+1. Toàn bộ tiền cọc/tiền công hiện vẫn được Smart Escrow khóa an toàn, không bên nào có thể đơn phương rút tiền.
+2. Bạn hãy nhấn nút "Khiếu Nại / Tranh Chấp" tại màn hình công việc, tải lên ảnh màn hình chat và hình ảnh minh chứng.
+3. Trọng tài Campus và Ban Quản Trị GigMe sẽ mở phòng đối soát 3 bên trong vòng tối đa 24 giờ để xem xét công tâm và ra phán quyết hoàn tiền/giải ngân bảo vệ bạn.`;
+    }
+
+    if (text.includes('cccd') || text.includes('nfc') || text.includes('thẻ sinh viên') || text.includes('kyc') || text.includes('xác thực')) {
+      return `Chào bạn! Về xác thực sinh viên & CCCD NFC:
+• Vào mục "Hồ Sơ" -> "Xác thực danh tính" -> Chụp thẻ sinh viên hoặc quét NFC chip CCCD (chuẩn C06 ICAO 9303).
+• Đặt thẻ trên mặt phẳng tối màu, đủ sáng, tránh bóng đèn chói lóa.
+• Xác thực thành công sẽ giúp bạn tăng điểm tín nhiệm (Trust Score lên đến 100) và mở khóa nhận các công việc giá trị cao trên 100.000đ - 1.000.000đ.`;
+    }
+
+    if (text.includes('nhận việc') || text.includes('tìm việc') || text.includes('làm thêm') || text.includes('radar')) {
+      return `Chào bạn! Để tìm việc làm thêm trên GigMe:
+1. Mở "Trang Chủ", bật Radar quét việc quanh bán kính KTX (1km - 5km) hoặc chọn các việc Online/Từ xa.
+2. Bấm vào công việc bạn muốn làm -> chọn "Ứng Tuyển Ngay" (hoặc nhập giá nếu là việc Đấu Thầu Ngược).
+3. Sau khi người thuê chọn bạn và tiền đã được ký quỹ vào Smart Escrow, bạn bắt đầu thực hiện công việc nhé!`;
+    }
+
+    return `Chào bạn! Mình là Trợ Lý AI Thông Minh GigMe 24/7. Mình có thể hỗ trợ bạn về:
+1. 🛡️ Cơ chế ký quỹ Smart Escrow (an toàn 100%, chống bùng cọc).
+2. ⚡ Nạp VietQR (1-3s) và Rút tiền Napas 24/7 tức thì 0đ phí.
+3. 💼 Hướng dẫn nhận việc, đấu thầu ngược và tìm việc quanh KTX.
+4. ⚖️ Quy trình Trọng tài Campus đối soát tranh chấp trong 24 giờ.
+Bạn đang cần hỗ trợ chi tiết về vấn đề gì?`;
+  }
+
+  // 10.2 GigMe 24/7 Smart Campus & Escrow Chat Assistant (Powered by Groq / Gemini with Multi-Model Fallback & Local Knowledge Engine)
+  const handleAiChatAssistant = async (req: Request, res: Response) => {
     const { message, history } = req.body || {};
 
     if (!message) {
@@ -2135,7 +2887,7 @@ Chỉ trả về JSON thuần túy, không thêm markdown.`;
     }
 
     const skillPrompt = getSkillMdPrompt();
-    const GROQ_API_KEY = process.env.GROQ_API_KEY || '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';
+    const GROQ_API_KEY = (process.env.GROQ_API_KEY || '').trim();
 
     // Format chat messages with skill instructions
     const conversationMessages: Array<{ role: string; content: string }> = [
@@ -2161,16 +2913,16 @@ Chỉ trả về JSON thuần túy, không thêm markdown.`;
       content: String(message),
     });
 
-    // 1. Try Groq Cloud with provided API key (model: openai/gpt-oss-120b or openai/gpt-oss-20b)
-    if (GROQ_API_KEY) {
-      const groqModels = ['openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'qwen/qwen3.8-27b'];
+    // 1. Try Groq Cloud ONLY IF a valid non-empty user-supplied GROQ_API_KEY exists (never use hardcoded/revoked keys)
+    if (GROQ_API_KEY && GROQ_API_KEY.startsWith('gsk_') && GROQ_API_KEY.length > 25) {
+      const groqModels = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'];
       for (const groqModel of groqModels) {
         try {
           const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': `Bearer ${GROQ_API_KEY.trim()}`,
+              'Authorization': `Bearer ${GROQ_API_KEY}`,
             },
             body: JSON.stringify({
               model: groqModel,
@@ -2187,8 +2939,13 @@ Chỉ trả về JSON thuần túy, không thêm markdown.`;
               return res.json({ reply: reply.trim(), provider: 'groq', model: groqModel });
             }
           } else {
+            const status = groqRes.status;
             const errText = await groqRes.text();
-            console.warn(`Groq API (${groqModel}) returned error:`, groqRes.status, errText);
+            console.warn(`Groq API (${groqModel}) returned error:`, status, errText);
+            // If API key is rejected (401 or 403), stop trying Groq to avoid spamming errors
+            if (status === 401 || status === 403) {
+              break;
+            }
           }
         } catch (groqErr: any) {
           console.warn(`Groq fetch error (${groqModel}):`, groqErr?.message);
@@ -2196,34 +2953,55 @@ Chỉ trả về JSON thuần túy, không thêm markdown.`;
       }
     }
 
-    // 2. Fallback to Gemini if Groq is unavailable
+    // 2. Try Gemini with official recommended model aliases and automatic fallback on temporary spikes (503/429)
     const ai = getGemini();
     if (ai) {
-      try {
-        const response = await ai.models.generateContent({
-          model: 'gemini-2.5-flash',
-          contents: [
-            {
-              role: 'user',
-              parts: [{ text: `${skillPrompt}\n\nCâu hỏi/tình huống của sinh viên: ${message}` }],
-            },
-          ],
-        });
+      // Use official recommended models from gemini-api skill:
+      // 'gemini-3.8-flash' (standard for text/Q&A), 'gemini-3.1-pro-preview' (advanced text/STEM), and 'gemini-3.1-flash-lite'
+      const geminiCandidateModels = ['gemini-3.8-flash', 'gemini-3.1-pro-preview', 'gemini-3.1-flash-lite', 'gemini-flash-latest'];
+      for (const geminiModel of geminiCandidateModels) {
+        try {
+          const response = await ai.models.generateContent({
+            model: geminiModel,
+            contents: [
+              {
+                role: 'user',
+                parts: [
+                  {
+                    text: `${skillPrompt}\n\nLƯU Ý: Trả lời ngắn gọn, thân thiện, bảo vệ quyền lợi sinh viên.\n\nCâu hỏi của sinh viên: ${message}`,
+                  },
+                ],
+              },
+            ],
+          });
 
-        if (response.text) {
-          return res.json({ reply: response.text, provider: 'gemini' });
+          if (response.text && response.text.trim()) {
+            return res.json({ reply: response.text.trim(), provider: 'gemini', model: geminiModel });
+          }
+        } catch (geminiErr: any) {
+          const errMsg = geminiErr?.message || String(geminiErr);
+          const isDemandSpike = errMsg.includes('503') || errMsg.includes('high demand') || errMsg.includes('UNAVAILABLE') || errMsg.includes('429');
+          if (isDemandSpike) {
+            // High demand on Google's cloud cluster is expected and temporary; silently switch to next model candidate or local knowledge engine
+            console.info(`Gemini (${geminiModel}) temporary cluster high demand, switching to next candidate.`);
+          } else {
+            console.warn(`Gemini (${geminiModel}) error:`, errMsg);
+          }
+          // Continue to next model candidate in case of 503 high demand or temporary spike
         }
-      } catch (geminiErr: any) {
-        console.warn('Gemini Assistant fallback error:', geminiErr?.message);
       }
     }
 
-    // 3. Fallback to default intelligent reply from skill
+    // 3. Robust local knowledge engine fallback based on skill.md
+    const localReply = generateSmartLocalResponse(message);
     return res.json({
-      reply: 'Xin chào bạn! Mình là Trợ lý AI GigMe. Mình luôn sẵn sàng giải đáp mọi câu hỏi của bạn về Gigme. Bạn đang cần hỗ trợ vấn đề gì cụ thể?',
-      provider: 'fallback',
+      reply: localReply,
+      provider: 'local_skill_engine',
     });
-  });
+  };
+
+  app.post('/api/gemini/chat-assistant', aiChatRateLimiter, handleAiChatAssistant);
+  app.post('/api/ai/chat', aiChatRateLimiter, handleAiChatAssistant);
 
   // 10.5 NFC CCCD ICAO 9303 Verification Endpoint
   app.post('/api/kyc/cccd-nfc', (req: Request, res: Response) => {
@@ -2269,6 +3047,25 @@ Chỉ trả về JSON thuần túy, không thêm markdown.`;
 
     res.json({ success: true, verification: verificationRecord });
   });
+
+  // 10.6 Explicit APK download endpoints with correct MIME headers & streaming
+  const handleApkDownload = (_req: Request, res: Response) => {
+    const apkFilePath = path.join(process.cwd(), 'public', 'downloads', 'Gigme.apk');
+    if (!fs.existsSync(apkFilePath)) {
+      return res.status(404).json({ error: 'File Gigme.apk không tồn tại trên máy chủ' });
+    }
+    const stat = fs.statSync(apkFilePath);
+    res.setHeader('Content-Type', 'application/vnd.android.package-archive');
+    res.setHeader('Content-Disposition', 'attachment; filename="Gigme.apk"');
+    res.setHeader('Content-Length', stat.size);
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    const readStream = fs.createReadStream(apkFilePath);
+    readStream.pipe(res);
+  };
+
+  app.get('/downloads/Gigme.apk', handleApkDownload);
+  app.get('/downloads/GigMe-Student-v1.0.apk', handleApkDownload);
+  app.get('/api/download/gigme.apk', handleApkDownload);
 
   // 11. Vite Middleware or Static Assets
   if (process.env.NODE_ENV !== 'production') {

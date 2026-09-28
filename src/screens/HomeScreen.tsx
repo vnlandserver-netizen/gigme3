@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, Suspense, lazy } from 'react';
 import {
   Search,
   Mic,
@@ -13,7 +13,6 @@ import {
   Award,
   ArrowRight,
   Filter,
-  Trophy,
   BookOpen,
   QrCode,
   Smartphone,
@@ -24,25 +23,38 @@ import {
   Bell,
   ShieldAlert,
   WifiOff,
+  Navigation,
 } from 'lucide-react';
 import { useGigMe } from '../context/GigMeContext';
-import { InteractiveRadar } from '../components/InteractiveRadar';
-import { VoiceSearchDialog } from '../components/AdvancedDialogs';
-import { OfflineGigsModal } from '../components/OfflineGigsModal';
 import { formatVnd, GigEntity } from '../types';
 import { VIETNAM_HUBS } from '../utils/geo';
+import { triggerHaptic } from '../utils/haptics';
+import { PullToRefresh } from '../components/PullToRefresh';
+import { VerifiedIdentityBadge } from '../components/VerifiedIdentityBadge';
+
+// Lazy load heavy components for instant initial page render (Code-Splitting)
+const InteractiveRadar = lazy(() =>
+  import('../components/InteractiveRadar').then((m) => ({ default: m.InteractiveRadar }))
+);
+const VoiceSearchDialog = lazy(() =>
+  import('../components/AdvancedDialogs').then((m) => ({ default: m.VoiceSearchDialog }))
+);
+const OfflineGigsModal = lazy(() =>
+  import('../components/OfflineGigsModal').then((m) => ({ default: m.OfflineGigsModal }))
+);
+
 
 interface HomeScreenProps {
   onSelectGigDetail: (gigId: string) => void;
   onOpenCreateGig: () => void;
   onOpenVerify: () => void;
-  onOpenLeaderboard?: () => void;
   onOpenMarketplace?: () => void;
   onOpenVietQrScanner?: () => void;
   onOpenPaymentGateway?: () => void;
   onOpenGeminiVision?: () => void;
   onOpenFcmPush?: () => void;
   onOpenEloModal?: () => void;
+  onOpenDownloadApp?: () => void;
 }
 
 const CATEGORIES = [
@@ -78,13 +90,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   onSelectGigDetail,
   onOpenCreateGig,
   onOpenVerify,
-  onOpenLeaderboard,
   onOpenMarketplace,
   onOpenVietQrScanner,
   onOpenPaymentGateway,
   onOpenGeminiVision,
   onOpenFcmPush,
   onOpenEloModal,
+  onOpenDownloadApp,
 }) => {
   const {
     filteredGigs,
@@ -111,6 +123,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     acceptGigDirectly,
     userCoords,
     setUserCoords,
+    refreshCloudConnection,
+    users,
   } = useGigMe();
 
   const [isVoiceOpen, setIsVoiceOpen] = useState(false);
@@ -118,8 +132,17 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [isOfflineModalOpen, setIsOfflineModalOpen] = useState(false);
   const isClient = roleMode === 'CLIENT';
 
+  const handlePullRefresh = async () => {
+    try {
+      await refreshCloudConnection();
+    } catch {
+      // ignore
+    }
+  };
+
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 pb-24 space-y-6">
+    <PullToRefresh onRefresh={handlePullRefresh}>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 pb-24 space-y-6">
       {/* Tier Newbie Advisory Banner */}
       {currentUser && currentUser.tier === 'NEWBIE' && (
         <div className="p-4 rounded-2xl bg-[#12233B] border border-[#3064AE]/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs shadow-lg relative overflow-hidden">
@@ -145,18 +168,36 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       )}
 
       {/* Interactive Geofence Radar & Google Maps Discovery View */}
-      <InteractiveRadar
-        gigs={filteredGigs}
-        selectedGigId={selectedGigId}
-        onSelectGig={(id) => {
-          selectGig(id);
-        }}
-        radiusMeters={selectedRadiusMeters}
-        onRadiusChange={setRadius}
-        isClientMode={isClient}
-        userCoords={userCoords}
-        onUserCoordsChange={setUserCoords}
-      />
+      <Suspense
+        fallback={
+          <div className="w-full h-80 rounded-3xl bg-gradient-to-b from-[#0D192B] to-[#102038] border border-[#3064AE]/30 flex flex-col items-center justify-center p-6 space-y-3 relative overflow-hidden shadow-xl">
+            <div className="absolute inset-0 bg-[radial-gradient(#3064AE_1px,transparent_1px)] [background-size:16px_16px] opacity-20" />
+            <div className="relative flex items-center justify-center">
+              <div className="w-16 h-16 rounded-full border border-[#3064AE]/50 animate-ping absolute opacity-30" />
+              <div className="w-12 h-12 rounded-full border-2 border-t-[#3064AE] border-r-[#C5E5EC] border-b-transparent border-l-transparent animate-spin" />
+              <Navigation className="w-5 h-5 text-[#C5E5EC] absolute" />
+            </div>
+            <div className="text-center relative z-10">
+              <p className="text-xs font-bold text-white tracking-wide">Đang nạp Bản đồ Radar GPS Campus</p>
+              <p className="text-[11px] text-[#C5E5EC]/70 mt-0.5">Tải nền bất đồng bộ - Tiết kiệm dung lượng & khởi động siêu tốc</p>
+            </div>
+          </div>
+        }
+      >
+        <InteractiveRadar
+          gigs={filteredGigs}
+          selectedGigId={selectedGigId}
+          onSelectGig={(id) => {
+            selectGig(id);
+          }}
+          radiusMeters={selectedRadiusMeters}
+          onRadiusChange={setRadius}
+          isClientMode={isClient}
+          userCoords={userCoords}
+          onUserCoordsChange={setUserCoords}
+        />
+      </Suspense>
+
 
       {/* Campus Quick Hub Shortcuts - Sleek swipeable carousel on mobile, neat grid on desktop */}
       <div>
@@ -167,25 +208,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           </span>
           <span className="text-[10px] text-[#C5E5EC]/70 font-semibold hidden sm:inline">Trượt ngang để xem thêm tiện ích &rarr;</span>
         </div>
-        <div className="flex overflow-x-auto gap-2.5 pb-2 scrollbar-none snap-x sm:grid sm:grid-cols-4 lg:grid-cols-8">
-          {onOpenLeaderboard && (
-            <button
-              onClick={onOpenLeaderboard}
-              className="min-w-[130px] sm:min-w-0 p-3 rounded-2xl bg-[#0E1B2E] hover:bg-[#13243C] border border-[#C5E5EC]/20 hover:border-[#C5E5EC]/40 text-left transition group shadow-sm shrink-0 snap-start active:scale-95 cursor-pointer"
-            >
-              <div className="flex items-center justify-between mb-1.5">
-                <div className="p-1.5 rounded-lg bg-[#3064AE]/30 text-amber-300 shadow-xs border border-amber-400/20">
-                  <Trophy className="w-4 h-4 group-hover:scale-110 transition" />
-                </div>
-                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-400/20 text-amber-200 border border-amber-400/30 font-black shadow-2xs">
-                  Top 10
-                </span>
-              </div>
-              <h5 className="font-black text-white text-xs truncate">BXH Campus</h5>
-              <p className="text-[10px] text-[#C5E5EC]/70 font-medium truncate">Top thưởng tuần</p>
-            </button>
-          )}
-
+        <div
+          data-swipeable="true"
+          className="flex overflow-x-auto gap-2.5 pb-2 scrollbar-none snap-x sm:grid sm:grid-cols-4 lg:grid-cols-7 touch-pan-x overscroll-x-contain"
+        >
           {onOpenMarketplace && (
             <button
               onClick={onOpenMarketplace}
@@ -291,6 +317,24 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             <h5 className="font-black text-white text-xs truncate">Kho Việc Offline</h5>
             <p className="text-[10px] text-[#C5E5EC]/70 font-medium truncate">Xem trong thang máy</p>
           </button>
+
+          {onOpenDownloadApp && (
+            <button
+              onClick={onOpenDownloadApp}
+              className="min-w-[130px] sm:min-w-0 p-3 rounded-2xl bg-gradient-to-br from-[#122846] to-[#0E1B2E] hover:from-[#173258] hover:to-[#13243C] border border-[#3064AE] hover:border-[#C5E5EC]/50 text-left transition group shadow-sm shrink-0 snap-start active:scale-95 cursor-pointer ring-1 ring-[#3064AE]/30"
+            >
+              <div className="flex items-center justify-between mb-1.5">
+                <div className="p-1.5 rounded-lg bg-[#3064AE] text-white shadow-xs border border-[#E0FAEB]/30">
+                  <Smartphone className="w-4 h-4 group-hover:scale-110 transition text-[#E0FAEB]" />
+                </div>
+                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-black shadow-2xs">
+                  1 Chạm
+                </span>
+              </div>
+              <h5 className="font-black text-white text-xs truncate">Cài App GigMe</h5>
+              <p className="text-[10px] text-[#E0FAEB] font-bold truncate">Android & iOS</p>
+            </button>
+          )}
         </div>
       </div>
 
@@ -349,13 +393,19 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         </div>
 
         {/* Categories Carousel */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+        <div
+          data-swipeable="true"
+          className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none touch-pan-x overscroll-x-contain"
+        >
           {CATEGORIES.map((cat) => {
             const isSelected = selectedCategory === cat;
             return (
               <button
                 key={cat}
-                onClick={() => setCategory(cat)}
+                onClick={() => {
+                  triggerHaptic('light');
+                  setCategory(cat);
+                }}
                 className={`flex items-center space-x-1 px-3.5 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap border shadow-xs active:scale-95 cursor-pointer ${
                   isSelected
                     ? cat === 'Flash Gigs'
@@ -554,6 +604,32 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                       {gig.title}
                     </h4>
 
+                    {/* Poster Info & Verification Badge */}
+                    <div className="flex items-center space-x-1.5 flex-wrap gap-y-1 mb-2">
+                      <span className="text-[11px] font-bold text-slate-300">
+                        {gig.clientName}
+                      </span>
+                      {(() => {
+                        const poster = users.find((u) => u.id === gig.clientId);
+                        const isCccd = poster?.isNfcVerified || gig.clientTier === 'CCCD_VERIFIED' || gig.clientTier === 'PRO';
+                        const isStudent = poster?.isStudentVerified || poster?.isEduVerified || gig.clientTier === 'STUDENT';
+                        const school = poster?.studentSchool || '';
+
+                        if (isCccd || isStudent) {
+                          return (
+                            <VerifiedIdentityBadge
+                              isCccdVerified={isCccd}
+                              isStudentVerified={isStudent}
+                              school={school}
+                              size="sm"
+                              showText={true}
+                            />
+                          );
+                        }
+                        return null;
+                      })()}
+                    </div>
+
                     {/* Description */}
                     <p className="text-xs text-[#C5E5EC]/75 line-clamp-2 mb-3 leading-relaxed">
                       {gig.description}
@@ -601,6 +677,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
+                            triggerHaptic('medium');
                             onSelectGigDetail(gig.id);
                           }}
                           className={`px-3.5 py-1.5 rounded-xl font-extrabold text-xs shadow-md transition flex items-center space-x-1 active:scale-95 cursor-pointer ${
@@ -623,18 +700,28 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       </div>
 
       {/* Voice Search Modal */}
-      <VoiceSearchDialog
-        isOpen={isVoiceOpen}
-        onClose={() => setIsVoiceOpen(false)}
-        onSelectQuery={(q) => setSearchQuery(q)}
-      />
+      {isVoiceOpen && (
+        <Suspense fallback={null}>
+          <VoiceSearchDialog
+            isOpen={isVoiceOpen}
+            onClose={() => setIsVoiceOpen(false)}
+            onSelectQuery={(q) => setSearchQuery(q)}
+          />
+        </Suspense>
+      )}
 
       {/* Offline Gigs Cache Modal */}
-      <OfflineGigsModal
-        isOpen={isOfflineModalOpen}
-        onClose={() => setIsOfflineModalOpen(false)}
-        onSelectGig={(id) => onSelectGigDetail(id)}
-      />
-    </div>
+      {isOfflineModalOpen && (
+        <Suspense fallback={null}>
+          <OfflineGigsModal
+            isOpen={isOfflineModalOpen}
+            onClose={() => setIsOfflineModalOpen(false)}
+            onSelectGig={(id) => onSelectGigDetail(id)}
+          />
+        </Suspense>
+      )}
+
+      </div>
+    </PullToRefresh>
   );
 };

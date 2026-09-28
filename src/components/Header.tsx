@@ -22,6 +22,8 @@ import {
 } from 'lucide-react';
 import { useGigMe } from '../context/GigMeContext';
 import { formatVnd, USER_TIERS } from '../types';
+import { NotificationCenter } from './NotificationCenter';
+import { triggerHaptic } from '../utils/haptics';
 
 interface HeaderProps {
   onOpenCreateGig: () => void;
@@ -29,13 +31,13 @@ interface HeaderProps {
   onOpenProfile: () => void;
   onOpenAdmin: () => void;
   onOpenDownloadApp: () => void;
-  onOpenLeaderboard?: () => void;
   onOpenMarketplace?: () => void;
   onOpenChat?: () => void;
   onOpenFcmPush?: () => void;
   onOpenEloModal?: () => void;
   onOpenVietQrScanner?: () => void;
   onOpenPaymentGateway?: () => void;
+  onSelectGigDetail?: (gigId: string) => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -44,13 +46,13 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenProfile,
   onOpenAdmin,
   onOpenDownloadApp,
-  onOpenLeaderboard,
   onOpenMarketplace,
   onOpenChat,
   onOpenFcmPush,
   onOpenEloModal,
   onOpenVietQrScanner,
   onOpenPaymentGateway,
+  onSelectGigDetail,
 }) => {
   const {
     currentUser,
@@ -78,7 +80,7 @@ export const Header: React.FC<HeaderProps> = ({
   }, []);
 
   return (
-    <header className="sticky top-0 z-40 w-full backdrop-blur-md bg-[#0B1528]/95 dark:bg-[#070D18]/98 border-b border-[#C5E5EC]/20 shadow-[0_4px_25px_-4px_rgba(48,100,174,0.25)] transition-colors duration-200">
+    <header className="sticky top-0 z-40 w-full backdrop-blur-md bg-white/95 dark:bg-[#0B1528]/95 border-b border-slate-200 dark:border-[#C5E5EC]/20 shadow-[0_4px_25px_-4px_rgba(48,100,174,0.15)] dark:shadow-[0_4px_25px_-4px_rgba(48,100,174,0.25)] transition-colors duration-200">
       {/* Top Accent Proportional Brand Gradient Stripe (60% Cobalt -> 30% Crystal -> 10% Ethereal) */}
       <div className="h-1 w-full bg-brand-horiz-gradient" />
 
@@ -109,32 +111,24 @@ export const Header: React.FC<HeaderProps> = ({
           />
           <div>
             <div className="flex items-center space-x-1">
-              <span className="text-lg sm:text-xl font-black tracking-tight text-white">Gig</span>
-              <span className="text-lg sm:text-xl font-black text-[#C5E5EC]">Me</span>
+              <span className="text-lg sm:text-xl font-black tracking-tight text-slate-900 dark:text-white">Gig</span>
+              <span className="text-lg sm:text-xl font-black text-[#3064AE] dark:text-[#C5E5EC]">Me</span>
               <span className="text-[9px] sm:text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-gradient-to-r from-[#3064AE] to-[#255294] text-[#E0FAEB] border border-[#C5E5EC]/30 shadow-xs">
                 Sinh Viên
               </span>
             </div>
-            <p className="text-[10px] text-[#C5E5EC]/80 font-medium hidden sm:block">
-              Nền tảng việc làm sinh viên & Smart Escrow
+            <p className="text-[10px] text-slate-500 dark:text-[#C5E5EC]/80 font-medium hidden sm:block">
+              Nền tảng việc làm sinh viên &amp; Smart Escrow
             </p>
           </div>
         </div>
 
-        {/* Shortcuts: BXH Campus & Chợ KTX (Desktop only) */}
+        {/* Shortcuts: Chợ KTX (Desktop only) */}
         <div className="hidden lg:flex items-center space-x-2 text-xs">
-          {onOpenLeaderboard && (
-            <button
-              onClick={onOpenLeaderboard}
-              className="px-3 py-1.5 rounded-xl bg-[#3064AE]/20 hover:bg-[#3064AE]/35 text-[#C5E5EC] border border-[#C5E5EC]/30 font-extrabold transition flex items-center space-x-1.5 shadow-xs active:scale-95 cursor-pointer"
-            >
-              <span>🏆 BXH Top</span>
-            </button>
-          )}
           {onOpenMarketplace && (
             <button
               onClick={onOpenMarketplace}
-              className="px-3 py-1.5 rounded-xl bg-[#12233B] hover:bg-[#162B48] text-[#E0FAEB] border border-[#E0FAEB]/30 font-extrabold transition flex items-center space-x-1.5 shadow-xs active:scale-95 cursor-pointer"
+              className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-[#12233B] dark:hover:bg-[#162B48] text-slate-800 dark:text-[#E0FAEB] border border-slate-200 dark:border-[#E0FAEB]/30 font-extrabold transition flex items-center space-x-1.5 shadow-xs active:scale-95 cursor-pointer"
             >
               <span>📚 Chợ KTX</span>
             </button>
@@ -143,92 +137,126 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Right Section: Compact on mobile, rich on desktop */}
         <div className="flex items-center space-x-1.5 sm:space-x-2.5">
+          {/* Notification Center (Real-time Firestore Alerts for Messages & Payments with FCM Push) */}
+          <NotificationCenter
+            onOpenFcmPush={onOpenFcmPush}
+            onOpenWallet={onOpenWallet}
+            onOpenChat={onOpenChat}
+            onSelectGigDetail={onSelectGigDetail}
+          />
+
           {/* Wallet Balance Chip with Cobalt & Crystal styling */}
           <button
             id="header-wallet-btn"
-            onClick={onOpenWallet}
-            className="flex items-center space-x-2 px-2.5 sm:px-3.5 py-1.5 rounded-xl bg-[#12233B] hover:bg-[#162B48] border border-[#C5E5EC]/30 transition group shadow-sm active:scale-95 cursor-pointer"
+            onClick={() => {
+              triggerHaptic('light');
+              onOpenWallet();
+            }}
+            className="flex items-center space-x-2 px-2.5 sm:px-3.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-[#12233B] dark:hover:bg-[#162B48] border border-slate-200 dark:border-[#C5E5EC]/30 transition group shadow-sm active:scale-95 cursor-pointer"
           >
             <div className="p-1 rounded-lg bg-[#3064AE] text-[#E0FAEB] shadow-xs border border-[#C5E5EC]/30">
               <Wallet className="w-3.5 h-3.5 group-hover:scale-110 transition" />
             </div>
             <div className="text-left leading-none">
-              <span className="text-[9px] text-[#C5E5EC] hidden sm:block font-extrabold">Số dư Ví</span>
-              <span className="text-xs sm:text-sm font-black text-white font-mono">
+              <span className="text-[9px] text-slate-500 dark:text-[#C5E5EC] hidden sm:block font-extrabold">Số dư Ví</span>
+              <span className="text-xs sm:text-sm font-black text-slate-900 dark:text-white font-mono">
                 {currentUser ? formatVnd(currentUser.walletBalance) : '0đ'}
               </span>
             </div>
           </button>
 
+          {/* Global Dark/Light Theme Toggle (Accessible on Mobile & Desktop) */}
+          <button
+            id="theme-toggle-btn"
+            onClick={() => {
+              triggerHaptic('medium');
+              toggleDarkMode();
+            }}
+            className="p-2 sm:px-2.5 sm:py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-[#12233B] dark:hover:bg-[#162B48] border border-slate-200 dark:border-[#C5E5EC]/30 text-slate-700 dark:text-[#C5E5EC] transition active:scale-95 shadow-sm cursor-pointer flex items-center space-x-1.5"
+            title={isDarkMode ? 'Đang ở Chế độ Tối (Bấm để chuyển sang Giao diện Sáng)' : 'Đang ở Chế độ Sáng (Bấm để chuyển sang Giao diện Tối)'}
+            aria-label={isDarkMode ? 'Chuyển sang giao diện sáng' : 'Chuyển sang giao diện tối'}
+          >
+            {isDarkMode ? (
+              <Sun className="w-4 h-4 text-amber-400 fill-amber-400/30 transition-transform duration-300 hover:rotate-45" />
+            ) : (
+              <Moon className="w-4 h-4 text-[#3064AE] fill-[#3064AE]/20 transition-transform duration-300 hover:-rotate-12" />
+            )}
+            <span className="hidden sm:inline text-[11px] font-extrabold">
+              {isDarkMode ? 'Sáng' : 'Tối'}
+            </span>
+          </button>
+
           {/* DESKTOP ONLY BUTTONS */}
           <div className="hidden md:flex items-center space-x-2">
-            {/* Tải App APK Button (Ẩn khi đang chạy trong app) */}
+            {/* Tải App APK / PWA Button (Ẩn khi đang chạy trong app) */}
             {!isStandalone && (
               <button
                 id="header-download-app-btn"
-                onClick={onOpenDownloadApp}
-                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-[#3064AE] via-[#417AC6] to-[#C5E5EC] text-white font-extrabold text-xs hover:brightness-110 shadow-md shadow-[#3064AE]/30 transition cursor-pointer active:scale-95 border border-[#E0FAEB]/30"
-                title="Tải File APK cho điện thoại Android"
+                onClick={() => {
+                  triggerHaptic('medium');
+                  onOpenDownloadApp();
+                }}
+                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-[#3064AE] via-[#417AC6] to-[#C5E5EC] text-white font-extrabold text-xs hover:brightness-110 shadow-md shadow-[#3064AE]/30 transition-all duration-200 cursor-pointer active:scale-95 border border-[#E0FAEB]/30 hover:shadow-lg hover:shadow-cyan-500/20"
+                title="Tải App & File APK cho điện thoại Android & iOS"
               >
-                <Download className="w-3.5 h-3.5 stroke-[2.5]" />
-                <span>Tải APK</span>
+                <Download className="w-3.5 h-3.5 stroke-[2.5] animate-bounce-short" />
+                <span>Tải App</span>
               </button>
             )}
 
-            {/* Quét VietQR Nạp rút 24/7 */}
+            {/* Quét VietQR Nạp rút 24/7 (Chỉ hiện logo icon) */}
             {onOpenVietQrScanner && (
               <button
                 id="header-vietqr-btn"
-                onClick={onOpenVietQrScanner}
-                className="flex items-center space-x-1.5 px-2.5 py-1.5 rounded-xl bg-[#12233B] hover:bg-[#162B48] text-[#E0FAEB] border border-[#C5E5EC]/30 transition text-xs font-bold active:scale-95 shadow-sm cursor-pointer"
-                title="VietQR: Quét VietQR Nạp rút 24/7"
+                onClick={() => {
+                  triggerHaptic('medium');
+                  onOpenVietQrScanner();
+                }}
+                className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-[#12233B] dark:hover:bg-[#162B48] text-slate-700 dark:text-[#E0FAEB] border border-slate-200 dark:border-[#C5E5EC]/30 transition active:scale-95 shadow-sm cursor-pointer"
+                title="Quét VietQR 24/7"
               >
-                <QrCode className="w-4 h-4 text-[#E0FAEB]" />
-                <span className="hidden lg:inline">VietQR 24/7</span>
+                <QrCode className="w-4 h-4" />
               </button>
             )}
 
-            {/* Cổng Ví Điện Tử MoMo & ZaloPay */}
+            {/* Cổng Ví Điện Tử MoMo & ZaloPay (Chỉ hiện logo icon) */}
             {onOpenPaymentGateway && (
               <button
                 id="header-momo-btn"
-                onClick={onOpenPaymentGateway}
-                className="flex items-center space-x-1.5 px-2.5 py-1.5 rounded-xl bg-[#12233B] hover:bg-[#162B48] text-pink-300 border border-pink-500/30 transition text-xs font-bold active:scale-95 shadow-sm cursor-pointer"
-                title="Cổng Ví Điện Tử MoMo & ZaloPay"
+                onClick={() => {
+                  triggerHaptic('medium');
+                  onOpenPaymentGateway();
+                }}
+                className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-[#12233B] dark:hover:bg-[#162B48] text-pink-600 dark:text-pink-300 border border-slate-200 dark:border-pink-500/30 transition active:scale-95 shadow-sm cursor-pointer"
+                title="Cổng MoMo & ZaloPay"
               >
-                <Smartphone className="w-4 h-4 text-pink-400" />
-                <span className="hidden lg:inline">MoMo & ZaloPay</span>
+                <Smartphone className="w-4 h-4 text-pink-500 dark:text-pink-400" />
               </button>
             )}
 
-            {/* ELO Điểm Tín Nhiệm Huy hiệu & rank */}
+            {/* ELO Điểm Tín Nhiệm Huy hiệu & rank (Chỉ hiện logo icon) */}
             {onOpenEloModal && (
               <button
                 id="header-elo-btn"
-                onClick={onOpenEloModal}
-                className="flex items-center space-x-1.5 px-2.5 py-1.5 rounded-xl bg-[#12233B] hover:bg-[#162B48] text-[#E0FAEB] border border-[#C5E5EC]/30 transition text-xs font-bold active:scale-95 shadow-sm cursor-pointer"
-                title="ELO: Điểm Tín Nhiệm Huy hiệu & rank"
+                onClick={() => {
+                  triggerHaptic('light');
+                  onOpenEloModal();
+                }}
+                className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-[#12233B] dark:hover:bg-[#162B48] text-slate-700 dark:text-[#E0FAEB] border border-slate-200 dark:border-[#C5E5EC]/30 transition active:scale-95 shadow-sm cursor-pointer"
+                title={`${currentUser?.eloRating ?? 0} ELO - Điểm Tín Nhiệm`}
               >
-                <Award className="w-4 h-4 text-[#C5E5EC]" />
-                <span className="hidden xl:inline">{currentUser?.eloRating ?? 0} ELO</span>
+                <Award className="w-4 h-4 text-[#3064AE] dark:text-[#C5E5EC]" />
               </button>
             )}
-
-            {/* Theme Toggle */}
-            <button
-              id="theme-toggle-btn"
-              onClick={toggleDarkMode}
-              className="p-2 rounded-xl bg-[#12233B] hover:bg-[#162B48] border border-[#C5E5EC]/30 text-[#C5E5EC] transition active:scale-95 shadow-sm cursor-pointer"
-              title={isDarkMode ? 'Đang ở Chế độ Siêu Tối (Bấm để chuyển sang Xanh Cobalt)' : 'Đang ở Chế độ Xanh Cobalt (Bấm để chuyển sang Siêu Tối)'}
-            >
-              {isDarkMode ? <Moon className="w-4 h-4 text-[#C5E5EC]" /> : <Sun className="w-4 h-4 text-[#E0FAEB]" />}
-            </button>
 
             {/* Profile */}
             <button
               id="header-profile-btn"
-              onClick={onOpenProfile}
-              className="flex items-center space-x-2 p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl bg-[#12233B] hover:bg-[#162B48] border border-[#C5E5EC]/30 transition active:scale-95 shadow-sm cursor-pointer"
+              onClick={() => {
+                triggerHaptic('light');
+                onOpenProfile();
+              }}
+              className="flex items-center space-x-2 p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-[#12233B] dark:hover:bg-[#162B48] border border-slate-200 dark:border-[#C5E5EC]/30 transition active:scale-95 shadow-sm cursor-pointer"
             >
               <div className="w-7 h-7 rounded-lg overflow-hidden bg-gradient-to-br from-[#3064AE] to-[#255294] border border-[#C5E5EC]/40 flex items-center justify-center font-bold text-xs text-white shadow shrink-0">
                 {currentUser?.avatarUrl ? (
@@ -239,7 +267,7 @@ export const Header: React.FC<HeaderProps> = ({
                   <User className="w-4 h-4 text-[#C5E5EC]" />
                 )}
               </div>
-              <span className="text-xs font-semibold text-white hidden lg:block">
+              <span className="text-xs font-semibold text-slate-800 dark:text-white hidden lg:block">
                 {currentUser?.name || 'Tài khoản'}
               </span>
             </button>
@@ -247,8 +275,11 @@ export const Header: React.FC<HeaderProps> = ({
             {/* Logout button */}
             <button
               id="header-logout-btn"
-              onClick={logout}
-              className="p-2 rounded-xl bg-[#12233B] hover:bg-red-950/40 text-[#C5E5EC] hover:text-red-400 border border-[#C5E5EC]/20 hover:border-red-500/40 transition active:scale-95 shadow-sm cursor-pointer"
+              onClick={() => {
+                triggerHaptic('medium');
+                logout();
+              }}
+              className="p-2 rounded-xl bg-slate-100 hover:bg-red-50 dark:bg-[#12233B] dark:hover:bg-red-950/40 text-slate-500 hover:text-red-600 dark:text-[#C5E5EC] dark:hover:text-red-400 border border-slate-200 dark:border-[#C5E5EC]/20 hover:border-red-400 dark:hover:border-red-500/40 transition active:scale-95 shadow-sm cursor-pointer"
               title="Đăng xuất khỏi tài khoản"
             >
               <LogOut className="w-4 h-4" />
@@ -377,6 +408,26 @@ export const Header: React.FC<HeaderProps> = ({
                 <div className="min-w-0">
                   <p className="font-bold text-white truncate">Tải File APK</p>
                   <p className="text-[10px] text-[#E0FAEB] truncate">Android Package</p>
+                </div>
+              </button>
+            )}
+
+            {/* Thông báo FCM & Màn hình khóa */}
+            {onOpenFcmPush && (
+              <button
+                id="mobile-fcm-btn"
+                onClick={() => {
+                  setIsMobileMenuOpen(false);
+                  onOpenFcmPush();
+                }}
+                className="p-3 rounded-xl bg-[#12233B] border border-amber-500/20 text-left hover:bg-[#162B48] transition flex items-center space-x-2.5 cursor-pointer active:scale-95"
+              >
+                <div className="p-1.5 rounded-lg bg-amber-500/20 text-amber-300 shrink-0 border border-amber-500/30">
+                  <Bell className="w-4 h-4 text-amber-300" />
+                </div>
+                <div className="min-w-0">
+                  <p className="font-bold text-white truncate">Thông Báo Đẩy</p>
+                  <p className="text-[10px] text-amber-300/80 truncate">Màn hình khóa & FCM</p>
                 </div>
               </button>
             )}

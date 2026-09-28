@@ -18,6 +18,7 @@ import {
   Smartphone,
   Building2,
   Download,
+  AlertTriangle,
 } from 'lucide-react';
 import { useGigMe } from '../context/GigMeContext';
 import { formatVnd, TransactionEntity } from '../types';
@@ -41,7 +42,9 @@ export const WalletScreen: React.FC<WalletScreenProps> = ({ onOpenVerify }) => {
     currentUser,
     userTransactions,
     withdrawFunds,
-    requestMicroLoan,
+    checkDepositEligibility,
+    checkWithdrawalEligibility,
+    isOverBalanceLimit,
   } = useGigMe();
 
   const [isQrOpen, setIsQrOpen] = useState(false);
@@ -50,15 +53,10 @@ export const WalletScreen: React.FC<WalletScreenProps> = ({ onOpenVerify }) => {
   const [isEWalletOpen, setIsEWalletOpen] = useState(false);
   const [isStatementOpen, setIsStatementOpen] = useState(false);
   const [isBankWithdrawOpen, setIsBankWithdrawOpen] = useState(false);
-  const [showLoanModal, setShowLoanModal] = useState(false);
-  const [showBalance, setShowBalance] = useState(true);
-
-  // Micro loan fields
-  const [loanAmount, setLoanAmount] = useState(200000);
-  const [loanReason, setLoanReason] = useState('Đóng tiền giáo trình & ăn trưa');
+  const [showBalance, setShowBalance] = useState(false);
 
   // Transaction filter
-  const [txFilter, setTxFilter] = useState<'ALL' | 'INCOME' | 'EXPENSE' | 'ESCROW' | 'LOAN'>('ALL');
+  const [txFilter, setTxFilter] = useState<'ALL' | 'INCOME' | 'EXPENSE' | 'ESCROW'>('ALL');
 
   const txList = userTransactions || [];
   const filteredTx = txList.filter((tx) => {
@@ -66,17 +64,8 @@ export const WalletScreen: React.FC<WalletScreenProps> = ({ onOpenVerify }) => {
     if (txFilter === 'INCOME') return tx.type === 'INCOME' || tx.type === 'ESCROW_RELEASE' || tx.type === 'ESCROW_PAYOUT' || tx.type === 'VIETQR_DEPOSIT' || tx.type === 'EWALLET_DEPOSIT';
     if (txFilter === 'EXPENSE') return tx.type === 'EXPENSE' || tx.type === 'ESCROW_LOCK' || tx.type === 'BANK_WITHDRAWAL' || tx.type === 'EWALLET_WITHDRAW';
     if (txFilter === 'ESCROW') return tx.type === 'ESCROW_LOCK' || tx.type === 'ESCROW_RELEASE' || tx.type === 'ESCROW_PAYOUT';
-    if (txFilter === 'LOAN') return tx.type === 'LOAN_DISBURSE';
     return true;
   });
-
-  const handleLoanSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const ok = requestMicroLoan(loanAmount, loanReason);
-    if (ok) {
-      setShowLoanModal(false);
-    }
-  };
 
   const isVerified = Boolean(
     currentUser?.isKycApproved ||
@@ -87,6 +76,37 @@ export const WalletScreen: React.FC<WalletScreenProps> = ({ onOpenVerify }) => {
 
   return (
     <div className="max-w-3xl mx-auto px-3 sm:px-4 py-4 sm:py-6 pb-28 text-slate-900 dark:text-white space-y-4 sm:space-y-6">
+      {/* CẢNH BÁO SỐ DƯ VƯỢT TRẦN 200 TRIỆU (ÉP RÚT TIỀN) */}
+      {isOverBalanceLimit && (
+        <div className="p-4 sm:p-5 rounded-3xl bg-rose-950/85 border-2 border-rose-500 text-rose-200 shadow-2xl flex items-start space-x-3.5 animate-pulse">
+          <AlertTriangle className="w-6 h-6 text-rose-400 shrink-0 mt-0.5" />
+          <div className="space-y-1.5 flex-1">
+            <div className="flex items-center justify-between">
+              <h4 className="font-black text-sm text-white uppercase tracking-wider">
+                ⚠️ TÀI KHOẢN VƯỢT HẠN MỨC 200 TRIỆU (ÉP RÚT TIỀN)
+              </h4>
+              <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-rose-600 text-white uppercase">
+                TẠM KHÓA GIAO DỊCH
+              </span>
+            </div>
+            <p className="text-xs text-rose-200/90 leading-relaxed">
+              Theo quy định nền tảng: Mỗi tài khoản chỉ được phép tích lũy tối đa <strong>200.000.000đ</strong>.
+              Tài khoản của bạn hiện có <strong>{formatVnd(currentUser?.walletBalance || 0)}</strong>. Các tính năng nạp tiền, đăng việc và nhận việc đã bị tạm dừng. Vui lòng bấm <strong>"Rút Tiền Ngay"</strong> để chuyển bớt tiền về ngân hàng!
+            </p>
+            <button
+              onClick={() => {
+                playNotificationSound('BUTTON_CLICK');
+                setIsBankWithdrawOpen(true);
+              }}
+              className="mt-1 px-4 py-2 rounded-xl bg-gradient-to-r from-rose-600 to-red-600 hover:brightness-110 text-white font-extrabold text-xs shadow-lg transition flex items-center space-x-1.5 cursor-pointer"
+            >
+              <ArrowUpRight className="w-4 h-4 stroke-[2.5]" />
+              <span>Rút Tiền Về Ngân Hàng Ngay &rarr;</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Balance Card with Cobalt Blue (60%), Crystal Blue (30%), Ethereal Green (10%) Brand Styling */}
       <div className="rounded-3xl bg-gradient-to-r from-[#18345E] via-[#10223D] to-[#0A1526] border border-[#C5E5EC]/25 text-white p-5 sm:p-6 shadow-xl relative overflow-hidden">
         {/* Left Decorative Proportional Brand Gradient Bar */}
@@ -159,6 +179,29 @@ export const WalletScreen: React.FC<WalletScreenProps> = ({ onOpenVerify }) => {
               <ArrowUpRight className="w-4 h-4 text-[#E0FAEB] stroke-[2.5]" />
               <span>Rút Napas 247 (&lt;3s)</span>
             </button>
+          </div>
+
+          {/* Deposit & Withdrawal Limits Safety Rules */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-[10px] text-[#C5E5EC]/80">
+              <span className="flex items-center space-x-1 font-semibold">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                <span>Nạp tiền: Max 10M/lần • Giãn cách 15p • Max 30M/ngày • Trần 200M</span>
+              </span>
+              <span className="font-mono text-[#E0FAEB]">
+                {formatVnd(checkDepositEligibility().todayDeposited)}/30M
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-[10px] text-[#C5E5EC]/80">
+              <span className="flex items-center space-x-1 font-semibold">
+                <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
+                <span>Rút tiền: Max 3M/lần • Giãn cách 15p • Dư &gt;50k • &gt;=1 việc • Tuổi &gt;=5 ngày • Online &gt;=3h</span>
+              </span>
+              <span className="font-mono text-cyan-300 font-bold">
+                {checkWithdrawalEligibility().isAdminBypass ? 'Admin Bypass ✓' : 'Max 3M'}
+              </span>
+            </div>
           </div>
         </div>
       </div>
@@ -303,35 +346,7 @@ export const WalletScreen: React.FC<WalletScreenProps> = ({ onOpenVerify }) => {
             <span className="text-[10px] text-[#C5E5EC] shrink-0">&rarr;</span>
           </button>
 
-          {/* Card 4: SOS Micro-loan */}
-          <button
-            id="student-loan-btn"
-            onClick={() => {
-              if (!isVerified) {
-                onOpenVerify();
-              } else {
-                setShowLoanModal(true);
-              }
-            }}
-            className="p-3.5 rounded-2xl bg-[#12233B] hover:bg-[#162B48] border border-purple-500/30 text-left transition flex items-center justify-between group shadow-sm active:scale-[0.99] cursor-pointer"
-          >
-            <div className="flex items-center space-x-2.5 min-w-0">
-              <div className="p-2 rounded-xl bg-purple-500/20 text-purple-400 shrink-0">
-                <Sparkles className="w-4 h-4 text-purple-400" />
-              </div>
-              <div className="min-w-0">
-                <h5 className="font-extrabold text-xs text-white group-hover:text-purple-400 transition truncate">
-                  Vay Khẩn Cấp SOS 0%
-                </h5>
-                <p className="text-[10px] text-[#C5E5EC]/70 truncate">Hạn mức sinh viên 200k - 500k</p>
-              </div>
-            </div>
-            <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/40 font-bold shrink-0">
-              0% LÃI
-            </span>
-          </button>
-
-          {/* Card 5: Apple Pay / Google Pay / Thẻ Sinh Viên Liên Kết */}
+          {/* Card 4: Apple Pay / Google Pay / Thẻ Sinh Viên Liên Kết */}
           <button
             id="apple-pay-btn"
             onClick={() => {
@@ -341,24 +356,24 @@ export const WalletScreen: React.FC<WalletScreenProps> = ({ onOpenVerify }) => {
             className="p-3.5 rounded-2xl bg-[#12233B] hover:bg-[#162B48] border border-[#C5E5EC]/20 text-left transition flex items-center justify-between group shadow-sm active:scale-[0.99] sm:col-span-2 cursor-pointer"
           >
             <div className="flex items-center space-x-2.5 min-w-0">
-              <div className="p-2 rounded-xl bg-slate-900 text-white shrink-0">
-                <Zap className="w-4 h-4 text-sky-400" />
+              <div className="p-2 rounded-xl bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 shrink-0">
+                <Zap className="w-4 h-4 text-cyan-300" />
               </div>
               <div className="min-w-0">
                 <div className="flex items-center space-x-2">
-                  <h5 className="font-extrabold text-xs text-slate-900 group-hover:text-[#0284C7] transition truncate">
-                    Apple Pay & Google Pay (1-Chạm)
+                  <h5 className="font-extrabold text-xs text-white group-hover:text-cyan-300 transition truncate">
+                    Apple Pay, Google Pay & Thẻ Sinh Viên
                   </h5>
-                  <span className="text-[10px] px-1.5 py-0.2 rounded bg-sky-50 text-[#0284C7] font-bold border border-sky-200">
-                    Thẻ sinh viên chip
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-950/60 text-cyan-300 font-bold border border-cyan-500/30">
+                    NFC 1-Chạm
                   </span>
                 </div>
-                <p className="text-[10px] text-slate-500 truncate">
-                  Xác thực vân tay / Face ID hoặc thẻ sinh viên đa năng BIDV, VietinBank, Agribank
+                <p className="text-[10px] text-[#C5E5EC]/70 truncate">
+                  Xác thực vân tay, Face ID hoặc thẻ sinh viên đa năng BIDV, VietinBank, Agribank
                 </p>
               </div>
             </div>
-            <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-900 text-white font-bold shrink-0">
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-950/60 text-cyan-300 border border-cyan-500/30 font-bold shrink-0">
               1-TAP
             </span>
           </button>
@@ -452,41 +467,6 @@ export const WalletScreen: React.FC<WalletScreenProps> = ({ onOpenVerify }) => {
         </div>
       </div>
 
-      {/* Student SOS Micro-Loan Feature Highlight */}
-      <div className="p-4 rounded-3xl bg-[#141C30] border border-purple-500/30 flex items-start justify-between gap-3 text-xs shadow-lg relative overflow-hidden">
-        <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b from-purple-500 via-[#3064AE] to-[#E0FAEB]" />
-        <div className="pl-1">
-          <div className="flex items-center space-x-1.5 text-white font-extrabold">
-            <Zap className="w-4 h-4 text-amber-400 fill-current" />
-            <span>Gói Cứu Trợ Sinh Viên SOS (0% Lãi Suất)</span>
-          </div>
-          <p className="text-[#C5E5EC]/85 mt-1 leading-relaxed">
-            Hạn mức tối đa <strong>500.000đ</strong> dành riêng cho sinh viên đã xác thực cấp 2. Tự động trả dần khi
-            nhận thù lao các kèo tiếp theo.
-          </p>
-          <div className="flex items-center space-x-3 mt-2 text-[11px] text-[#C5E5EC]">
-            <span>
-              Hạn mức còn lại: <strong className="text-white">{formatVnd(currentUser?.microLoanCreditLimit || 500000)}</strong>
-            </span>
-            <span>•</span>
-            <span className="text-[#E0FAEB]">Giải ngân ngay trong 5 giây</span>
-          </div>
-        </div>
-
-        <button
-          onClick={() => {
-            if (!isVerified) {
-              onOpenVerify();
-            } else {
-              setShowLoanModal(true);
-            }
-          }}
-          className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-[#3064AE] hover:brightness-110 text-white font-extrabold text-xs shrink-0 transition shadow-md active:scale-95 border border-purple-400/30 cursor-pointer"
-        >
-          {isVerified ? 'Vay Nhanh' : 'Xác Thực Để Vay'}
-        </button>
-      </div>
-
       {/* Transactions History Header & Filters */}
       <div className="space-y-3">
         <div className="flex items-center justify-between flex-wrap gap-2">
@@ -506,7 +486,7 @@ export const WalletScreen: React.FC<WalletScreenProps> = ({ onOpenVerify }) => {
 
             {/* Filter tabs */}
             <div className="flex bg-[#0E1B2E] p-1 rounded-xl border border-[#C5E5EC]/20 text-[10px] font-bold">
-              {(['ALL', 'INCOME', 'EXPENSE', 'ESCROW', 'LOAN'] as const).map((filter) => (
+              {(['ALL', 'INCOME', 'EXPENSE', 'ESCROW'] as const).map((filter) => (
                 <button
                   key={filter}
                   onClick={() => setTxFilter(filter)}
@@ -520,9 +500,7 @@ export const WalletScreen: React.FC<WalletScreenProps> = ({ onOpenVerify }) => {
                     ? 'Thu'
                     : filter === 'EXPENSE'
                     ? 'Chi'
-                    : filter === 'ESCROW'
-                    ? 'Escrow'
-                    : 'Vay SOS'}
+                    : 'Escrow'}
                 </button>
               ))}
             </div>
@@ -589,70 +567,6 @@ export const WalletScreen: React.FC<WalletScreenProps> = ({ onOpenVerify }) => {
 
       {/* Napas247 Bank Withdraw Dialog */}
       <BankWithdrawDialog isOpen={isBankWithdrawOpen} onClose={() => setIsBankWithdrawOpen(false)} />
-
-      {/* STUDENT LOAN MODAL */}
-      {showLoanModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 animate-fade-in">
-          <div className="w-full max-w-md rounded-2xl bg-[#0E1B2E] border border-[#C5E5EC]/30 p-6 text-white shadow-2xl relative overflow-hidden">
-            <div className="absolute left-0 top-0 right-0 h-1.5 bg-brand-horiz-gradient" />
-            <div className="flex justify-between items-center pb-3 border-b border-[#C5E5EC]/15">
-              <h3 className="font-extrabold text-sm flex items-center space-x-1.5 text-white">
-                <Sparkles className="w-4 h-4 text-[#E0FAEB]" />
-                <span>Vay Cứu Trợ Sinh Viên 0% Lãi Suất</span>
-              </h3>
-              <button onClick={() => setShowLoanModal(false)} className="text-[#C5E5EC]/70 hover:text-white cursor-pointer p-1">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleLoanSubmit} className="py-4 space-y-3.5 text-xs">
-              <div className="p-3 rounded-xl bg-[#12233B] border border-[#3064AE]/40 text-[#C5E5EC]">
-                Chương trình hỗ trợ sinh viên khó khăn đột xuất. Khoản vay sẽ được chuyển trực tiếp vào ví ngay lập tức
-                với 0đ phụ phí!
-              </div>
-
-              <div>
-                <label className="block text-[#C5E5EC] mb-1 font-semibold">Chọn số tiền cần vay</label>
-                <div className="grid grid-cols-3 gap-2">
-                  {[100000, 200000, 500000].map((amt) => (
-                    <button
-                      key={amt}
-                      type="button"
-                      onClick={() => setLoanAmount(amt)}
-                      className={`py-2 rounded-xl border font-bold transition cursor-pointer ${
-                        loanAmount === amt
-                          ? 'bg-[#3064AE] text-white border-[#C5E5EC] shadow-md'
-                          : 'bg-[#12233B] text-[#C5E5EC] border-[#C5E5EC]/20 hover:bg-[#162B48]'
-                      }`}
-                    >
-                      {formatVnd(amt)}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[#C5E5EC] mb-1 font-semibold">Mục đích sử dụng</label>
-                <input
-                  type="text"
-                  required
-                  value={loanReason}
-                  onChange={(e) => setLoanReason(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-[#12233B] border border-[#C5E5EC]/20 text-white placeholder-[#C5E5EC]/40 focus:border-[#C5E5EC] focus:outline-hidden"
-                  placeholder="Đóng tiền trọ, mua thuốc, ăn uống..."
-                />
-              </div>
-
-              <button
-                type="submit"
-                className="w-full py-2.5 rounded-xl bg-gradient-to-r from-[#3064AE] via-[#417AC6] to-[#C5E5EC] text-white font-extrabold text-sm hover:brightness-110 shadow-lg shadow-[#3064AE]/30 transition active:scale-95 border border-[#E0FAEB]/30 cursor-pointer"
-              >
-                Nhận Tiền Giải Ngân Ngay Lập Tức
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* MoMo App-to-App & ZaloPay SDK Gateway Modal */}
       <MoMoZaloPayGatewayModal
