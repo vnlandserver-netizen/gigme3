@@ -92,7 +92,7 @@ export const NfcCccdScanDialog: React.FC<{
     birthYYMMDD || '040412',
     validation.gender === 'Nữ' ? 'F' : 'M',
     '441204',
-    fullName || 'NGUYEN VAN AN'
+    fullName || 'LY HOANG GIA BAO'
   );
 
   // Stop camera stream helper
@@ -262,8 +262,16 @@ export const NfcCccdScanDialog: React.FC<{
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-3 sm:p-4 animate-fade-in">
-      <div className="w-full max-w-lg rounded-3xl bg-[#0B1528] border border-cyan-500/30 p-5 sm:p-6 shadow-2xl text-white max-h-[92vh] flex flex-col">
+    <div
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          stopCamera();
+          onClose();
+        }
+      }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-3 sm:p-4 animate-fade-in"
+    >
+      <div onClick={(e) => e.stopPropagation()} className="w-full max-w-lg rounded-3xl bg-[#0B1528] border border-cyan-500/30 p-5 sm:p-6 shadow-2xl text-white max-h-[92vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-slate-800 shrink-0">
           <div className="flex items-center space-x-2.5">
@@ -822,8 +830,19 @@ export const FaceLivenessDialog: React.FC<{ isOpen: boolean; onClose: () => void
   const CurrentIcon = stepsData[step]?.icon || Camera;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4 animate-fade-in">
-      <div className="w-full max-w-sm rounded-3xl bg-white dark:bg-[#0F172A] border border-slate-200 dark:border-slate-800 p-6 text-center text-slate-900 dark:text-white shadow-2xl relative overflow-hidden">
+    <div
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          if (streamRef.current) {
+            streamRef.current.getTracks().forEach((t) => t.stop());
+            streamRef.current = null;
+          }
+          onClose();
+        }
+      }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4 animate-fade-in"
+    >
+      <div onClick={(e) => e.stopPropagation()} className="w-full max-w-sm rounded-3xl bg-white dark:bg-[#0F172A] border border-slate-200 dark:border-slate-800 p-6 text-center text-slate-900 dark:text-white shadow-2xl relative overflow-hidden">
         {/* Glow ambient background accent */}
         <div className="absolute -top-20 -right-20 w-40 h-40 bg-sky-400/15 rounded-full blur-2xl pointer-events-none" />
         <div className="absolute -bottom-20 -left-20 w-40 h-40 bg-emerald-400/15 rounded-full blur-2xl pointer-events-none" />
@@ -971,8 +990,13 @@ export const StudentSsoDialog: React.FC<{ isOpen: boolean; onClose: () => void }
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
-      <div className="w-full max-w-md rounded-2xl bg-[#0F172A] border border-[#1E293B] p-6 text-white shadow-2xl">
+    <div
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in"
+    >
+      <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-2xl bg-[#0F172A] border border-[#1E293B] p-6 text-white shadow-2xl">
         <div className="flex justify-between items-center pb-3 border-b border-slate-800">
           <div className="flex items-center space-x-2">
             <div className="p-2 rounded-xl bg-orange-500/10 text-[#FF6B00]">
@@ -1061,8 +1085,13 @@ export const VoiceSearchDialog: React.FC<{
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
-      <div className="w-full max-w-sm rounded-2xl bg-[#0F172A] border border-[#1E293B] p-6 text-center text-white">
+    <div
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in"
+    >
+      <div onClick={(e) => e.stopPropagation()} className="w-full max-w-sm rounded-2xl bg-[#0F172A] border border-[#1E293B] p-6 text-center text-white">
         <div className="flex justify-end">
           <button onClick={onClose} className="text-slate-400 hover:text-white">
             <X className="w-5 h-5" />
@@ -1247,8 +1276,13 @@ export const BankWithdrawDialog: React.FC<{ isOpen: boolean; onClose: () => void
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in overflow-y-auto">
-      <div className="w-full max-w-md rounded-3xl bg-[#0B1322] border-2 border-red-500/40 p-6 text-white shadow-2xl my-6">
+    <div
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in overflow-y-auto"
+    >
+      <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-3xl bg-[#0B1322] border-2 border-red-500/40 p-6 text-white shadow-2xl my-6">
         <div className="flex justify-between items-center pb-3 border-b border-slate-800">
           <div className="flex items-center space-x-2.5">
             <div className="p-2 rounded-2xl bg-gradient-to-tr from-red-600 to-orange-500 text-white shadow-lg shadow-red-500/20">
@@ -1614,8 +1648,13 @@ export const EWalletDialog: React.FC<{ isOpen: boolean; onClose: () => void }> =
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
-      <div className="w-full max-w-md rounded-2xl bg-[#0F172A] border border-[#1E293B] p-6 text-white shadow-2xl">
+    <div
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in"
+    >
+      <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-2xl bg-[#0F172A] border border-[#1E293B] p-6 text-white shadow-2xl">
         <div className="flex justify-between items-center pb-3 border-b border-slate-800">
           <h3 className="font-extrabold text-sm">Liên Kết & Giao Dịch Ví Điện Tử</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-white">
@@ -1806,8 +1845,13 @@ export const SoundSettingsDialog: React.FC<{ isOpen: boolean; onClose: () => voi
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-3 sm:p-4 animate-fade-in overflow-y-auto">
-      <div className="w-full max-w-md rounded-3xl bg-[#0B1322] border-2 border-[#00E5FF]/40 p-5 sm:p-6 text-white shadow-2xl my-6">
+    <div
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-3 sm:p-4 animate-fade-in overflow-y-auto"
+    >
+      <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-3xl bg-[#0B1322] border-2 border-[#00E5FF]/40 p-5 sm:p-6 text-white shadow-2xl my-6">
         {/* Header */}
         <div className="flex justify-between items-center pb-3 border-b border-slate-800">
           <div className="flex items-center space-x-2.5">
@@ -1922,8 +1966,13 @@ export const StatementDialog: React.FC<{ isOpen: boolean; onClose: () => void }>
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
-      <div className="w-full max-w-sm rounded-2xl bg-[#0F172A] border border-[#1E293B] p-6 text-white shadow-2xl text-center">
+    <div
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in"
+    >
+      <div onClick={(e) => e.stopPropagation()} className="w-full max-w-sm rounded-2xl bg-[#0F172A] border border-[#1E293B] p-6 text-white shadow-2xl text-center">
         <div className="flex justify-end">
           <button onClick={onClose} className="text-slate-400 hover:text-white">
             <X className="w-5 h-5" />
@@ -1983,8 +2032,13 @@ export const BusinessUpgradeDialog: React.FC<{ isOpen: boolean; onClose: () => v
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
-      <div className="w-full max-w-md rounded-2xl bg-[#0F172A] border border-[#1E293B] p-6 text-white shadow-2xl">
+    <div
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in"
+    >
+      <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-2xl bg-[#0F172A] border border-[#1E293B] p-6 text-white shadow-2xl">
         <div className="flex justify-between items-center pb-3 border-b border-slate-800">
           <div className="flex items-center space-x-2">
             <Building2 className="w-5 h-5 text-amber-400" />
@@ -2065,8 +2119,13 @@ export const MysteryBoxDialog: React.FC<{ isOpen: boolean; onClose: () => void }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
-      <div className="w-full max-w-sm rounded-3xl bg-[#0F172A] border border-[#00E5FF]/40 p-6 text-white text-center shadow-2xl relative">
+    <div
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in"
+    >
+      <div onClick={(e) => e.stopPropagation()} className="w-full max-w-sm rounded-3xl bg-[#0F172A] border border-[#00E5FF]/40 p-6 text-white text-center shadow-2xl relative">
         <button
           onClick={onClose}
           className="absolute top-4 right-4 text-slate-400 hover:text-white"

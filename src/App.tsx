@@ -149,6 +149,21 @@ const MainLayout: React.FC = () => {
   const [showGeminiVision, setShowGeminiVision] = useState(false);
   const [showBlockchainProof, setShowBlockchainProof] = useState(false);
 
+  // Tự động đóng modal và bảo vệ tab Admin khi chuyển đổi tài khoản
+  useEffect(() => {
+    setShowNfcModal(false);
+    setShowFaceModal(false);
+    setShowSsoModal(false);
+    setShowEloModal(false);
+    setShowVietQrScanner(false);
+    setShowPaymentGateway(false);
+    setShowGeminiVision(false);
+    setShowBlockchainProof(false);
+    if (currentTab === 'ADMIN' && currentUser?.role !== 'ADMIN' && currentUser?.id !== '000000000') {
+      setCurrentTab('HOME');
+    }
+  }, [currentUser?.id, currentUser?.role]);
+
   if (!currentUser) {
     return <AuthScreen />;
   }

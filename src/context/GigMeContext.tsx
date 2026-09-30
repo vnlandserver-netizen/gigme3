@@ -518,26 +518,9 @@ export const GigMeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return (localStorage.getItem(STORAGE_KEYS.ROLE_MODE) as AppRoleMode) || 'FREELANCER';
   });
 
-  const [themeMode, setThemeModeState] = useState<'CYBER_DARK' | 'AMOLED' | 'DAYLIGHT'>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('gigme_theme_mode') || localStorage.getItem('theme');
-      if (saved === 'DAYLIGHT' || saved === 'light') {
-        return 'DAYLIGHT';
-      }
-      if (saved === 'AMOLED') {
-        return 'AMOLED';
-      }
-      if (saved === 'CYBER_DARK' || saved === 'dark') {
-        return 'CYBER_DARK';
-      }
-    }
-    // Giao diện tối (CYBER_DARK) là giao diện mặc định
-    return 'CYBER_DARK';
-  });
-
-  const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
-    return themeMode !== 'DAYLIGHT';
-  });
+  // Giao diện tối (Dark Mode / Cyber Dark) là giao diện mặc định vĩnh viễn
+  const [themeMode, setThemeModeState] = useState<'CYBER_DARK' | 'AMOLED' | 'DAYLIGHT'>('CYBER_DARK');
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(true);
 
   const [gigs, setGigs] = useState<GigEntity[]>(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.GIGS);
@@ -708,7 +691,14 @@ export const GigMeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const unsubGigs = cloudService.subscribeGigs(
       (cloudGigs) => {
         setIsCloudConnected(true);
-        setGigs(cloudGigs);
+        if (cloudGigs && cloudGigs.length > 0) {
+          setGigs((prev) => {
+            const map = new Map<string, GigEntity>();
+            prev.forEach((g) => map.set(g.id, g));
+            cloudGigs.forEach((g) => map.set(g.id, g));
+            return Array.from(map.values());
+          });
+        }
       },
       (status) => {
         setCloudStatus(status);
@@ -718,12 +708,26 @@ export const GigMeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     // 3. Lắng nghe đề xuất đấu giá thời gian thực
     const unsubBids = cloudService.subscribeBids((cloudBids) => {
-      setBids(cloudBids);
+      if (cloudBids && cloudBids.length > 0) {
+        setBids((prev) => {
+          const map = new Map<string, BidEntity>();
+          prev.forEach((b) => map.set(b.id, b));
+          cloudBids.forEach((b) => map.set(b.id, b));
+          return Array.from(map.values());
+        });
+      }
     });
 
     // 4. Lắng nghe tin nhắn trò chuyện công việc thời gian thực
     const unsubChats = cloudService.subscribeChats((cloudChats) => {
-      setChats(cloudChats);
+      if (cloudChats && cloudChats.length > 0) {
+        setChats((prev) => {
+          const map = new Map<string, ChatMessageEntity>();
+          prev.forEach((c) => map.set(c.id, c));
+          cloudChats.forEach((c) => map.set(c.id, c));
+          return Array.from(map.values());
+        });
+      }
     });
 
     // 5. Lắng nghe người dùng thực tế thời gian thực
@@ -762,7 +766,14 @@ export const GigMeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     // 6. Lắng nghe giao dịch ví thực tế thời gian thực
     const unsubTransactions = cloudService.subscribeTransactions((cloudTxs) => {
-      setTransactions(cloudTxs);
+      if (cloudTxs && cloudTxs.length > 0) {
+        setTransactions((prev) => {
+          const map = new Map<string, WalletTransactionEntity>();
+          prev.forEach((t) => map.set(t.id, t));
+          cloudTxs.forEach((t) => map.set(t.id, t));
+          return Array.from(map.values());
+        });
+      }
     });
 
     // 7. Lắng nghe chế độ bảo trì toàn hệ thống thời gian thực (Realtime Maintenance Mode)
@@ -889,33 +900,20 @@ export const GigMeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, [roleMode]);
 
   useEffect(() => {
-    const isDark = themeMode !== 'DAYLIGHT';
-    localStorage.setItem('gigme_theme_mode', themeMode);
-    localStorage.setItem('theme', isDark ? 'dark' : 'light');
-    localStorage.setItem(STORAGE_KEYS.DARK_MODE, JSON.stringify(isDark));
-    setIsDarkMode(isDark);
+    localStorage.setItem('gigme_theme_mode', 'CYBER_DARK');
+    localStorage.setItem('theme', 'dark');
+    localStorage.setItem(STORAGE_KEYS.DARK_MODE, 'true');
+    setIsDarkMode(true);
 
-    if (isDark) {
-      document.documentElement.classList.add('dark');
-      document.documentElement.classList.remove('light', 'theme-daylight');
-      if (themeMode === 'AMOLED') {
-        document.documentElement.classList.add('theme-amoled');
-        document.documentElement.classList.remove('theme-cyber');
-      } else {
-        document.documentElement.classList.add('theme-cyber');
-        document.documentElement.classList.remove('theme-amoled');
-      }
-    } else {
-      document.documentElement.classList.remove('dark', 'theme-amoled', 'theme-cyber');
-      document.documentElement.classList.add('light', 'theme-daylight');
-    }
+    document.documentElement.classList.add('dark', 'theme-cyber');
+    document.documentElement.classList.remove('light', 'theme-daylight', 'theme-amoled');
 
     // Update browser theme-color meta for matching address bar
     const metaThemeColor = document.querySelector('meta[name="theme-color"]');
     if (metaThemeColor) {
-      metaThemeColor.setAttribute('content', isDark ? '#0C1728' : '#3064AE');
+      metaThemeColor.setAttribute('content', '#0C1728');
     }
-  }, [themeMode]);
+  }, []);
 
   // Derived states
   const currentUser = users.find((u) => u.id === currentUserId) || null;
@@ -961,7 +959,7 @@ export const GigMeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const currentSelectedGig = gigs.find((g) => g.id === selectedGigId) || null;
   const currentGigBids = bids.filter((b) => b.gigId === selectedGigId);
   const currentChatMessages = chats.filter((c) => c.gigId === selectedGigId);
-  const walletTransactions = transactions.filter((t) => !currentUserId || t.userId === currentUserId);
+  const walletTransactions = currentUserId ? transactions.filter((t) => t.userId === currentUserId) : [];
 
   // Filtered gigs based on radius, category, search, price, duration, and smart match
   const filteredGigs = useMemo(() => {
@@ -1102,34 +1100,19 @@ export const GigMeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const toggleDarkMode = () => {
-    setThemeModeState((prev) => {
-      const nextMode = prev === 'DAYLIGHT' ? 'CYBER_DARK' : 'DAYLIGHT';
-      const isNextDark = nextMode !== 'DAYLIGHT';
-      showNotification(
-        isNextDark ? '🌙 Chế Độ Giao Diện Tối (Dark Mode)' : '☀️ Chế Độ Giao Diện Sáng (Daylight)',
-        isNextDark
-          ? 'Đã chuyển sang giao diện tối dịu mắt, tiết kiệm pin cho sinh viên.'
-          : 'Đã chuyển sang giao diện sáng rõ nét, phong cách thanh lịch hiện đại.'
-      );
-      return nextMode;
-    });
+    setThemeModeState('CYBER_DARK');
+    setIsDarkMode(true);
+    showNotification('Giao diện tối mặc định', 'Hệ thống GigMe được thiết lập mặc định ở chế độ Giao Diện Tối (Dark Mode).');
   };
 
-  const setThemeMode = (mode: 'CYBER_DARK' | 'AMOLED' | 'DAYLIGHT') => {
-    setThemeModeState(mode);
-    if (currentUser) {
-      const updated = { ...currentUser, themePreference: mode };
-      setUsers((prev) => prev.map((u) => (u.id === currentUser.id ? updated : u)));
-      cloudService.saveUser(updated);
-    }
+  const setThemeMode = (_mode: 'CYBER_DARK' | 'AMOLED' | 'DAYLIGHT') => {
+    setThemeModeState('CYBER_DARK');
+    setIsDarkMode(true);
   };
 
   const toggleThemeMode = () => {
-    setThemeModeState((prev) => {
-      if (prev === 'CYBER_DARK') return 'AMOLED';
-      if (prev === 'AMOLED') return 'DAYLIGHT';
-      return 'CYBER_DARK';
-    });
+    setThemeModeState('CYBER_DARK');
+    setIsDarkMode(true);
   };
 
   const updateUserProfile = (updates: Partial<UserEntity>) => {
@@ -1509,12 +1492,26 @@ export const GigMeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       return false;
     }
 
+    if (user.id === '000000000' || user.email === 'admin@admin.vn' || user.role === 'ADMIN') {
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('gigme_admin_active_session', 'true');
+        sessionStorage.setItem('gigme_admin_session_time', String(Date.now()));
+        localStorage.setItem(STORAGE_KEYS.CURRENT_USER_ID, '000000000');
+      }
+      setCurrentUserId('000000000');
+      showNotification('Chào mừng Quản trị viên!', 'Đã đăng nhập Trung Tâm Điều Hành Admin GigMe (ID: 000000000).', true);
+      return true;
+    }
+
     setCurrentUserId(user.id);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(STORAGE_KEYS.CURRENT_USER_ID, user.id);
+    }
     showNotification('Đăng nhập thành công!', `Chào mừng trở lại, ${user.name}!`, true);
     return true;
   };
 
-  // 3. SEND OTP (Hiệu lực 3 phút, chống Spam với Cooldown 60s)
+  // 3. SEND OTP (Hiệu lực 3 phút, chống Spam với Cooldown 60s, bảo mật không lộ mã trên giao diện)
   const sendOtp = (contact: string, purpose = 'RESET_PASSWORD'): boolean => {
     const trimmed = (contact || '').trim();
     if (!trimmed) {
@@ -1529,6 +1526,44 @@ export const GigMeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       return false;
     }
 
+    const trimmedContact = trimmed.toLowerCase();
+    let normalizedPhone = trimmedContact;
+    if (normalizedPhone.startsWith('+84')) {
+      normalizedPhone = '0' + normalizedPhone.slice(3).replace(/\D/g, '');
+    } else if (normalizedPhone.startsWith('84') && normalizedPhone.length >= 10 && !normalizedPhone.includes('@')) {
+      normalizedPhone = '0' + normalizedPhone.slice(2).replace(/\D/g, '');
+    } else if (!normalizedPhone.includes('@')) {
+      normalizedPhone = normalizedPhone.replace(/\D/g, '');
+    }
+
+    // Kiểm tra tài khoản có tồn tại hay không trước khi gửi OTP khôi phục mật khẩu
+    if (purpose === 'FORGOT_PASSWORD') {
+      const isAdminAccount =
+        trimmedContact === 'admin@admin.vn' ||
+        trimmedContact === '000000000' ||
+        normalizedPhone === '0909120918' ||
+        trimmedContact === 'admin';
+
+      const userExists = users.some((u) => {
+        const idMatch = u.id === trimmedContact;
+        const emailMatch = !!u.email && u.email.toLowerCase() === trimmedContact;
+        const phoneMatch = !!u.phone && (
+          u.phone === trimmedContact ||
+          u.phone === normalizedPhone ||
+          u.phone.replace(/\D/g, '') === normalizedPhone
+        );
+        return idMatch || emailMatch || phoneMatch;
+      });
+
+      if (!userExists && !isAdminAccount) {
+        showNotification(
+          'Tài khoản không tồn tại',
+          `Không tìm thấy tài khoản với "${trimmed}". Vui lòng kiểm tra lại Gmail hoặc Số điện thoại!`
+        );
+        return false;
+      }
+    }
+
     const code = generateSecureOtp(6);
     const expiry = Date.now() + 3 * 60 * 1000; // 3 phút
     setGeneratedOtp(code);
@@ -1537,12 +1572,17 @@ export const GigMeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setOtpFailedAttempts(0);
     setLastOtpSentAt(Date.now());
 
-    // Đồng bộ phía máy chủ backend
+    // Đồng bộ phía máy chủ backend & gửi email OTP qua nodemailer
     cloudService.requestCloudOtp(trimmed);
 
+    // Che thông tin liên hệ bảo mật (Masking contact)
+    const maskedContact = trimmed.includes('@')
+      ? trimmed.replace(/^(.{2})(.*)(@.*)$/, (_m, a, b, c) => `${a}${'*'.repeat(Math.min(b.length, 5))}${c}`)
+      : trimmed.replace(/^(\d{3})\d+(\d{3})$/, '$1***$2');
+
     showNotification(
-      'Mã xác thực OTP GigMe',
-      `Mã OTP xác thực của bạn là: [${code}]. Mã có hiệu lực trong 3 phút (Tối đa 3 lần thử). Vui lòng không chia sẻ mã này!`,
+      'Đã gửi mã xác thực OTP',
+      `Mã OTP xác thực 6 số đã được gửi tới ${maskedContact}. Vui lòng kiểm tra hộp thư Gmail hoặc tin nhắn (Hiệu lực 3 phút).`,
       true
     );
     return true;
@@ -1595,26 +1635,87 @@ export const GigMeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
 
     if (otpTargetContact) {
+      const target = otpTargetContact.trim().toLowerCase();
+      let normalizedTargetPhone = target;
+      if (normalizedTargetPhone.startsWith('+84')) {
+        normalizedTargetPhone = '0' + normalizedTargetPhone.slice(3).replace(/\D/g, '');
+      } else if (normalizedTargetPhone.startsWith('84') && normalizedTargetPhone.length >= 10 && !normalizedTargetPhone.includes('@')) {
+        normalizedTargetPhone = '0' + normalizedTargetPhone.slice(2).replace(/\D/g, '');
+      } else if (!normalizedTargetPhone.includes('@')) {
+        normalizedTargetPhone = normalizedTargetPhone.replace(/\D/g, '');
+      }
+
       const hashedNewPass = await hashPassword(newPassword.trim());
-      setUsers((prev) =>
-        prev.map((u) => {
-          if ((u.email && u.email.toLowerCase() === otpTargetContact) || (u.phone && u.phone === otpTargetContact)) {
-            const updated = { ...u, password: hashedNewPass };
+
+      // Cập nhật lên backend Express server
+      cloudService.resetCloudPassword(otpTargetContact, cleanOtp, newPassword.trim()).catch(() => {});
+
+      let matched = false;
+      const updatedUsers = users.map((u) => {
+        const idMatch = u.id === target;
+        const emailMatch = !!u.email && u.email.toLowerCase() === target;
+        const phoneMatch = !!u.phone && (
+          u.phone === target ||
+          u.phone === normalizedTargetPhone ||
+          u.phone.replace(/\D/g, '') === normalizedTargetPhone
+        );
+
+        if (idMatch || emailMatch || phoneMatch) {
+          matched = true;
+          const updated = { ...u, password: hashedNewPass };
+          cloudService.saveUser(updated);
+          return updated;
+        }
+        return u;
+      });
+
+      // Nếu người dùng chưa có trong mảng users cục bộ, tìm kiếm trên cloud Firestore
+      if (!matched) {
+        try {
+          const cloudUser = await findUserByContact(target) || (normalizedTargetPhone !== target ? await findUserByContact(normalizedTargetPhone) : null);
+          if (cloudUser) {
+            matched = true;
+            const updated = { ...cloudUser, password: hashedNewPass };
             cloudService.saveUser(updated);
-            return updated;
+            updatedUsers.push(updated);
           }
-          return u;
-        })
-      );
-      setGeneratedOtp(null);
-      setOtpExpiresAt(null);
-      setOtpFailedAttempts(0);
-      showNotification(
-        'Đặt lại mật khẩu thành công!',
-        'Mật khẩu mới đã được mã hóa an toàn và cập nhật. Bạn có thể đăng nhập ngay bây giờ.',
-        true
-      );
-      return true;
+        } catch (e) {
+          console.warn('Could not find user in cloud for reset password:', e);
+        }
+      }
+
+      if (!matched) {
+        // Tài khoản Admin tối cao đặc biệt
+        if (target === 'admin@admin.vn' || target === '000000000' || normalizedTargetPhone === '0909120918') {
+          matched = true;
+          const updatedAdmin = { ...DEFAULT_ADMIN, password: hashedNewPass };
+          cloudService.saveUser(updatedAdmin);
+          updatedUsers.push(updatedAdmin);
+        }
+      }
+
+      if (matched) {
+        setUsers(updatedUsers);
+        try {
+          localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(updatedUsers));
+        } catch {}
+
+        setGeneratedOtp(null);
+        setOtpExpiresAt(null);
+        setOtpFailedAttempts(0);
+        showNotification(
+          'Đặt lại mật khẩu thành công!',
+          'Mật khẩu mới đã được cập nhật an toàn. Bạn có thể đăng nhập ngay bây giờ.',
+          true
+        );
+        return true;
+      } else {
+        showNotification(
+          'Không tìm thấy tài khoản',
+          'Không tìm thấy tài khoản tương ứng để cập nhật mật khẩu. Vui lòng kiểm tra lại thông tin!'
+        );
+        return false;
+      }
     }
     return false;
   };
@@ -1978,6 +2079,11 @@ export const GigMeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       sessionStorage.removeItem('gigme_admin_session_time');
     }
     setCurrentUserId(null);
+    setSelectedGigId(null);
+    setActiveVoipCall(null);
+    setNotification(null);
+    setGeneratedOtp(null);
+    setOtpTargetContact(null);
     showNotification('Đã đăng xuất', 'Bạn đã đăng xuất tài khoản an toàn.', true);
   };
 
@@ -2272,6 +2378,15 @@ export const GigMeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       return false;
     }
 
+    // Chống spam đặt giá thầu nhanh liên tục
+    const hasRecentBid = bids.some(
+      (b) => b.gigId === gigId && b.freelancerId === currentUser.id && Date.now() - b.createdAt < 3000
+    );
+    if (hasRecentBid) {
+      showNotification('Thao tác quá nhanh', 'Bạn vừa gửi đề xuất cho công việc này. Vui lòng đợi trong giây lát!');
+      return false;
+    }
+
     const newBid: BidEntity = {
       id: `bid_${Date.now()}`,
       gigId,
@@ -2308,6 +2423,21 @@ export const GigMeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   // ACCEPT GIG DIRECTLY
   const acceptGigDirectly = (gig: GigEntity): boolean => {
     if (!currentUser) return false;
+
+    // Kiểm tra trực tiếp trạng thái việc làm mới nhất từ State
+    const latestGig = gigs.find((g) => g.id === gig.id);
+    if (!latestGig || latestGig.status !== 'OPEN' || latestGig.freelancerId) {
+      showNotification(
+        'Đã có người nhận việc',
+        'Công việc này đã được người khác nhận hoặc không còn khả dụng!'
+      );
+      return false;
+    }
+
+    if (latestGig.clientId === currentUser.id) {
+      showNotification('Không thể nhận việc', 'Bạn không thể tự nhận công việc do chính mình đăng!');
+      return false;
+    }
 
     // Quy định: Số dư vượt trần 200 triệu sẽ bị cấm và ép rút tiền (Admin bypass)
     if (!isAdminUser(currentUser) && currentUser.walletBalance > 200_000_000) {
@@ -3903,10 +4033,20 @@ export const GigMeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
 
     const txId = generateSecureTxId('tx_dep');
-    const updatedUser: UserEntity = {
-      ...currentUser,
-      walletBalance: currentUser.walletBalance + amount,
-    };
+    let finalUser: UserEntity | null = null;
+    setUsers((prev) =>
+      prev.map((u) => {
+        if (u.id === currentUser.id) {
+          finalUser = {
+            ...u,
+            walletBalance: u.walletBalance + amount,
+          };
+          return finalUser;
+        }
+        return u;
+      })
+    );
+
     const tx: WalletTransactionEntity = {
       id: txId,
       userId: currentUser.id,
@@ -3919,7 +4059,6 @@ export const GigMeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       isSuccess: true,
     };
 
-    setUsers((prev) => prev.map((u) => (u.id === currentUser.id ? updatedUser : u)));
     setTransactions((prev) => [tx, ...prev]);
 
     // Atomic Cloud Sync
@@ -3930,7 +4069,9 @@ export const GigMeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       transactionId: txId,
       note: 'Nạp tiền VietQR Động 24/7',
     });
-    cloudService.saveUser(updatedUser);
+    if (finalUser) {
+      cloudService.saveUser(finalUser);
+    }
     cloudService.saveTransaction(tx);
 
     showNotification(
@@ -4338,10 +4479,20 @@ export const GigMeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
 
     const txId = generateSecureTxId('tx_ewd');
-    const updatedUser: UserEntity = {
-      ...currentUser,
-      walletBalance: currentUser.walletBalance + amount,
-    };
+    let finalUser: UserEntity | null = null;
+    setUsers((prev) =>
+      prev.map((u) => {
+        if (u.id === currentUser.id) {
+          finalUser = {
+            ...u,
+            walletBalance: u.walletBalance + amount,
+          };
+          return finalUser;
+        }
+        return u;
+      })
+    );
+
     const tx: WalletTransactionEntity = {
       id: txId,
       userId: currentUser.id,
@@ -4354,10 +4505,11 @@ export const GigMeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       isSuccess: true,
     };
 
-    setUsers((prev) => prev.map((u) => (u.id === currentUser.id ? updatedUser : u)));
     setTransactions((prev) => [tx, ...prev]);
 
-    cloudService.saveUser(updatedUser);
+    if (finalUser) {
+      cloudService.saveUser(finalUser);
+    }
     cloudService.saveTransaction(tx);
 
     showNotification(
@@ -4378,10 +4530,20 @@ export const GigMeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
 
     const txId = generateSecureTxId('tx_topup');
-    const updatedUser: UserEntity = {
-      ...currentUser,
-      walletBalance: currentUser.walletBalance + amount,
-    };
+    let finalUser: UserEntity | null = null;
+    setUsers((prev) =>
+      prev.map((u) => {
+        if (u.id === currentUser.id) {
+          finalUser = {
+            ...u,
+            walletBalance: u.walletBalance + amount,
+          };
+          return finalUser;
+        }
+        return u;
+      })
+    );
+
     const tx: WalletTransactionEntity = {
       id: txId,
       userId: currentUser.id,
@@ -4394,10 +4556,11 @@ export const GigMeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       isSuccess: true,
     };
 
-    setUsers((prev) => prev.map((u) => (u.id === currentUser.id ? updatedUser : u)));
     setTransactions((prev) => [tx, ...prev]);
 
-    cloudService.saveUser(updatedUser);
+    if (finalUser) {
+      cloudService.saveUser(finalUser);
+    }
     cloudService.saveTransaction(tx);
 
     triggerHaptic('escrow');

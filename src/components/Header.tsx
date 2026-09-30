@@ -4,7 +4,6 @@ import {
   Wallet,
   ShieldCheck,
   Moon,
-  Sun,
   ShieldAlert,
   User,
   PlusCircle,
@@ -59,7 +58,6 @@ export const Header: React.FC<HeaderProps> = ({
     roleMode,
     toggleRoleMode,
     isDarkMode,
-    toggleDarkMode,
     isAdminRole,
     isCloudConnected,
     logout,
@@ -163,27 +161,6 @@ export const Header: React.FC<HeaderProps> = ({
                 {currentUser ? formatVnd(currentUser.walletBalance) : '0đ'}
               </span>
             </div>
-          </button>
-
-          {/* Global Dark/Light Theme Toggle (Accessible on Mobile & Desktop) */}
-          <button
-            id="theme-toggle-btn"
-            onClick={() => {
-              triggerHaptic('medium');
-              toggleDarkMode();
-            }}
-            className="p-2 sm:px-2.5 sm:py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-[#12233B] dark:hover:bg-[#162B48] border border-slate-200 dark:border-[#C5E5EC]/30 text-slate-700 dark:text-[#C5E5EC] transition active:scale-95 shadow-sm cursor-pointer flex items-center space-x-1.5"
-            title={isDarkMode ? 'Đang ở Chế độ Tối (Bấm để chuyển sang Giao diện Sáng)' : 'Đang ở Chế độ Sáng (Bấm để chuyển sang Giao diện Tối)'}
-            aria-label={isDarkMode ? 'Chuyển sang giao diện sáng' : 'Chuyển sang giao diện tối'}
-          >
-            {isDarkMode ? (
-              <Sun className="w-4 h-4 text-amber-400 fill-amber-400/30 transition-transform duration-300 hover:rotate-45" />
-            ) : (
-              <Moon className="w-4 h-4 text-[#3064AE] fill-[#3064AE]/20 transition-transform duration-300 hover:-rotate-12" />
-            )}
-            <span className="hidden sm:inline text-[11px] font-extrabold">
-              {isDarkMode ? 'Sáng' : 'Tối'}
-            </span>
           </button>
 
           {/* DESKTOP ONLY BUTTONS */}
@@ -433,15 +410,11 @@ export const Header: React.FC<HeaderProps> = ({
             )}
           </div>
 
-          {/* Theme & Admin bottom bar */}
+          {/* Admin and action bottom bar */}
           <div className="flex items-center justify-between pt-2 border-t border-[#C5E5EC]/15 text-xs">
-            <button
-              onClick={toggleDarkMode}
-              className="flex items-center space-x-2 py-2 px-3 rounded-xl bg-[#12233B] text-[#C5E5EC] font-bold border border-[#C5E5EC]/20 cursor-pointer"
-            >
-              {isDarkMode ? <Sun className="w-4 h-4 text-[#E0FAEB]" /> : <Moon className="w-4 h-4 text-[#C5E5EC]" />}
-              <span>{isDarkMode ? 'Giao diện Sáng' : 'Giao diện Tối'}</span>
-            </button>
+            <div className="text-[11px] text-[#C5E5EC]/60 font-medium">
+              Chế độ mặc định: Dark Mode 🌙
+            </div>
 
             {isAdminRole && (
               <button

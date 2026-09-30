@@ -3,6 +3,8 @@ import cors from 'cors';
 import path from 'path';
 import fs from 'fs';
 import AdmZip from 'adm-zip';
+import nodemailer from 'nodemailer';
+import crypto from 'crypto';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import {
@@ -555,7 +557,7 @@ function ensureDbExists(): DatabaseSchema {
         bankName: 'MBBank',
         bankCode: 'MB',
         accountNumber: '0909120918',
-        accountHolder: 'NGUYEN VAN AN',
+        accountHolder: 'LY HOANG GIA BAO',
         secretKey: 'gigme_secret_bot_2026',
         telegramBotToken: '',
         telegramChatId: '',
@@ -951,7 +953,56 @@ async function startServer() {
     });
   });
 
-  app.post('/api/auth/send-otp', smsRateLimiter, (req: Request, res: Response) => {
+  // Helper to send email OTP via nodemailer
+  async function sendEmailOtp(email: string, code: string): Promise<boolean> {
+    try {
+      const transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+          user: process.env.GMAIL_USER || 'vnlandserver@gmail.com',
+          pass: process.env.GMAIL_APP_PASSWORD || process.env.GMAIL_PASS || '',
+        },
+      });
+
+      const mailOptions = {
+        from: `"GigMe Student Platform" <${process.env.GMAIL_USER || 'vnlandserver@gmail.com'}>`,
+        to: email,
+        subject: `[GigMe] Mã OTP khôi phục mật khẩu: ${code}`,
+        html: `
+          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 500px; margin: 0 auto; background: #0E1B2E; color: #ffffff; padding: 24px; border-radius: 16px; border: 1px solid #3064AE;">
+            <div style="text-align: center; margin-bottom: 20px;">
+              <h2 style="color: #E0FAEB; margin: 0; font-size: 24px; font-weight: 800;">Gig<span style="color: #3064AE;">Me</span> Campus</h2>
+              <p style="color: #C5E5EC; font-size: 13px; margin-top: 4px;">Nền tảng việc làm sinh viên & Smart Escrow bảo chứng</p>
+            </div>
+            <div style="background: #12233B; padding: 20px; border-radius: 12px; border: 1px solid #3064AE; text-align: center;">
+              <p style="color: #C5E5EC; font-size: 14px; margin-top: 0;">Mã OTP xác thực đặt lại mật khẩu của bạn là:</p>
+              <div style="font-family: monospace; font-size: 32px; font-weight: 900; letter-spacing: 6px; color: #E0FAEB; background: #081120; padding: 12px 20px; border-radius: 8px; display: inline-block; margin: 12px 0; border: 1px solid #E0FAEB;">
+                ${code}
+              </div>
+              <p style="color: #C5E5EC; font-size: 12px; margin-bottom: 0;">Mã có hiệu lực trong vòng <strong>3 phút</strong>. Tuyệt đối không chia sẻ mã này cho bất kỳ ai.</p>
+            </div>
+            <div style="text-align: center; margin-top: 20px; font-size: 11px; color: #C5E5EC; opacity: 0.7;">
+              © 2026 GigMe Student Platform. Bản quyền thuộc về GigMe Campus.
+            </div>
+          </div>
+        `,
+      };
+
+      if (process.env.GMAIL_APP_PASSWORD || process.env.GMAIL_PASS) {
+        await transporter.sendMail(mailOptions);
+        console.log(`[OTP] Sent email OTP to ${email}`);
+        return true;
+      } else {
+        console.log(`[OTP Simulation] Gmail App Password not set, simulated email OTP to ${email}: ${code}`);
+        return true;
+      }
+    } catch (err) {
+      console.error(`[OTP Error] Failed to send email to ${email}:`, err);
+      return false;
+    }
+  }
+
+  app.post('/api/auth/send-otp', smsRateLimiter, async (req: Request, res: Response) => {
     const { contact } = req.body;
     const trimmed = (contact || '').trim().toLowerCase();
     if (!trimmed) {
@@ -960,7 +1011,19 @@ async function startServer() {
     const code = generateSecureOtp(6);
     const expiresAt = Date.now() + 3 * 60 * 1000;
     otpStore.set(trimmed, { code, expiresAt });
-    res.json({ success: true, message: 'Đã gửi mã OTP', expiresAt, code });
+
+    // Send email if contact is an email or if user with this phone/id has an email
+    let targetEmail = trimmed.includes('@') ? trimmed : '';
+    if (!targetEmail) {
+      const db = ensureDbExists();
+      const user = db.users.find((u: any) => u.phone === trimmed || u.id === trimmed);
+      if (user?.email) targetEmail = user.email.toLowerCase();
+    }
+    if (targetEmail) {
+      await sendEmailOtp(targetEmail, code);
+    }
+    // Return success without exposing the secret OTP code in clear text
+    res.json({ success: true, message: 'Đã gửi mã OTP thành công', expiresAt });
   });
 
   app.post('/api/auth/verify-otp', (req: Request, res: Response) => {
@@ -984,6 +1047,64 @@ async function startServer() {
     // Consumed
     otpStore.delete(trimmedContact);
     res.json({ success: true, message: 'Xác thực OTP thành công' });
+  });
+
+  app.post('/api/auth/reset-password', (req: Request, res: Response) => {
+    const { contact, otp, newPassword } = req.body;
+    const trimmedContact = (contact || '').trim().toLowerCase();
+    const cleanOtp = (otp || '').trim();
+    const trimmedPass = (newPassword || '').trim();
+
+    if (!trimmedContact || !cleanOtp || !trimmedPass) {
+      return res.status(400).json({ success: false, error: 'Thiếu thông tin đặt lại mật khẩu' });
+    }
+    if (trimmedPass.length < 6) {
+      return res.status(400).json({ success: false, error: 'Mật khẩu mới phải có tối thiểu 6 ký tự' });
+    }
+
+    const stored = otpStore.get(trimmedContact);
+    if (!stored) {
+      return res.status(400).json({ success: false, error: 'Chưa có yêu cầu gửi mã OTP cho thông tin này' });
+    }
+    if (Date.now() > stored.expiresAt) {
+      otpStore.delete(trimmedContact);
+      return res.status(400).json({ success: false, error: 'Mã OTP đã hết hạn sau 3 phút' });
+    }
+    if (stored.code !== cleanOtp) {
+      return res.status(400).json({ success: false, error: 'Mã OTP không chính xác' });
+    }
+
+    otpStore.delete(trimmedContact);
+
+    const db = ensureDbExists();
+    let normalizedPhone = trimmedContact;
+    if (normalizedPhone.startsWith('+84')) {
+      normalizedPhone = '0' + normalizedPhone.slice(3).replace(/\D/g, '');
+    } else if (normalizedPhone.startsWith('84') && normalizedPhone.length >= 10 && !normalizedPhone.includes('@')) {
+      normalizedPhone = '0' + normalizedPhone.slice(2).replace(/\D/g, '');
+    } else if (!normalizedPhone.includes('@')) {
+      normalizedPhone = normalizedPhone.replace(/\D/g, '');
+    }
+
+    const userIndex = db.users.findIndex(
+      (u: any) =>
+        u.id === trimmedContact ||
+        u.email?.toLowerCase() === trimmedContact ||
+        u.phone === trimmedContact ||
+        u.phone === normalizedPhone ||
+        u.phone?.replace(/\D/g, '') === normalizedPhone
+    );
+
+    const salt = 'gigme_vietnam_campus_salt_2026';
+    const hashedPass = 'sha256_' + crypto.createHash('sha256').update(`${salt}__${trimmedPass}__${salt}`).digest('hex');
+
+    if (userIndex !== -1) {
+      db.users[userIndex].password = hashedPass;
+      writeDb(db);
+      broadcastSse('user_updated', sanitizeUser(db.users[userIndex]));
+    }
+
+    res.json({ success: true, message: 'Đặt lại mật khẩu thành công' });
   });
 
   // APK Generation and Download Route
@@ -1212,16 +1333,65 @@ async function startServer() {
   app.post('/api/users/login', loginRateLimiter, (req: Request, res: Response) => {
     const { contact, password } = req.body;
     const db = ensureDbExists();
-    const trimmedContact = (contact || '').trim().toLowerCase();
+    const rawContact = (contact || '').trim();
+    const trimmedContact = rawContact.toLowerCase();
     const trimmedPass = (password || '').trim();
 
+    // Chuẩn hóa số điện thoại: chuyển +84 thành 0, bỏ ký tự không phải số
+    let normalizedPhone = trimmedContact;
+    if (normalizedPhone.startsWith('+84')) {
+      normalizedPhone = '0' + normalizedPhone.slice(3).replace(/\D/g, '');
+    } else if (normalizedPhone.startsWith('84') && normalizedPhone.length >= 10 && !normalizedPhone.includes('@')) {
+      normalizedPhone = '0' + normalizedPhone.slice(2).replace(/\D/g, '');
+    } else if (!normalizedPhone.includes('@')) {
+      normalizedPhone = normalizedPhone.replace(/\D/g, '');
+    }
+
+    // Root Admin master check (Rule 1 & Rule 3)
+    if (
+      (trimmedContact === 'admin@admin.vn' ||
+        normalizedPhone === '0909120918' ||
+        trimmedContact === '000000000' ||
+        trimmedContact === 'admin') &&
+      trimmedPass === 'admin1507'
+    ) {
+      let admin = db.users.find((u: any) => u.id === '000000000' || u.email === 'admin@admin.vn');
+      if (!admin) {
+        admin = {
+          id: '000000000',
+          name: 'Ban Quản Trị GigMe Tối Cao',
+          email: 'admin@admin.vn',
+          phone: '0909120918',
+          role: 'ADMIN',
+          walletBalance: 999000000,
+          kycStatus: 'APPROVED',
+          trustScore: 100,
+        };
+        db.users.push(admin);
+        writeDb(db);
+      }
+      return res.json({ success: true, user: sanitizeUser(admin) });
+    }
+
     const user = db.users.find(
-      (u: any) => u.email?.toLowerCase() === trimmedContact || u.phone === trimmedContact
+      (u: any) =>
+        u.id === trimmedContact ||
+        u.email?.toLowerCase() === trimmedContact ||
+        u.phone === trimmedContact ||
+        u.phone === normalizedPhone ||
+        u.phone?.replace(/\D/g, '') === normalizedPhone
     );
     if (!user) {
       return res.status(404).json({ error: 'Không tìm thấy tài khoản' });
     }
-    if (user.password !== trimmedPass) {
+
+    const salt = 'gigme_vietnam_campus_salt_2026';
+    const computedHash = 'sha256_' + crypto.createHash('sha256').update(`${salt}__${trimmedPass}__${salt}`).digest('hex');
+
+    const isDirectMatch = user.password === trimmedPass;
+    const isHashedMatch = user.password === computedHash;
+
+    if (!isDirectMatch && !isHashedMatch) {
       return res.status(401).json({ error: 'Mật khẩu không đúng' });
     }
     if (user.isLocked) {
@@ -2280,7 +2450,7 @@ async function startServer() {
       bankName: 'MBBank',
       bankCode: 'MB',
       accountNumber: '0909120918',
-      accountHolder: 'NGUYEN VAN AN',
+      accountHolder: 'LY HOANG GIA BAO',
       secretKey: 'gigme_secret_bot_2026',
       telegramBotToken: '',
       telegramChatId: '',

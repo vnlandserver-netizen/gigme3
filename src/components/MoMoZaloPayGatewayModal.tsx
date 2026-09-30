@@ -87,8 +87,16 @@ export const MoMoZaloPayGatewayModal: React.FC<MoMoZaloPayGatewayModalProps> = (
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-fade-in overflow-y-auto">
-      <div className="w-full max-w-md rounded-3xl bg-[#0F172A] border-2 border-slate-700 p-6 text-white shadow-2xl space-y-5">
+    <div
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-fade-in overflow-y-auto"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-md rounded-3xl bg-[#0F172A] border-2 border-slate-700 p-6 text-white shadow-2xl space-y-5"
+      >
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-slate-800">
           <div className="flex items-center space-x-2.5">

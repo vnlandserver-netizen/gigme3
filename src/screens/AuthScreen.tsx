@@ -40,7 +40,6 @@ export const AuthScreen: React.FC = () => {
     checkMoSmsStatus,
     simulateMoSms,
     loginWithMoSms,
-    generatedOtp,
     otpTargetContact,
     otpExpiresAt,
     showNotification,
@@ -1020,22 +1019,32 @@ export const AuthScreen: React.FC = () => {
                 </div>
               </div>
 
-              {generatedOtp && (
-                <div className="p-3 rounded-xl bg-[#12233B] border border-[#E0FAEB]/30 text-[#E0FAEB] space-y-1">
+              {forgotCountdown > 0 && (
+                <div className="p-3.5 rounded-xl bg-[#12233B] border border-[#3064AE]/40 text-[#E0FAEB] space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-[11px] font-bold flex items-center text-[#E0FAEB]">
-                      <Sparkles className="w-3.5 h-3.5 mr-1 text-[#E0FAEB]" /> Tin nhắn OTP:
+                      <Mail className="w-3.5 h-3.5 mr-1.5 text-[#C5E5EC]" /> Đã gửi mã OTP bảo mật
                     </span>
                     <span className="text-[10px] text-[#C5E5EC] font-mono">Hiệu lực 3 phút</span>
                   </div>
-                  <div className="flex items-center space-x-2 py-1">
-                    <span className="text-xs text-[#C5E5EC]/80">Mã xác thực:</span>
-                    <strong className="font-mono text-base tracking-[0.2em] text-[#E0FAEB] bg-[#0E1B2E] px-2.5 py-0.5 rounded-lg border border-[#E0FAEB]/40 shadow-xs">
-                      {generatedOtp}
-                    </strong>
-                  </div>
-                  <p className="text-[10px] text-[#C5E5EC]/70">
-                    * Bắt buộc nhập chính xác 6 số này vào ô bên dưới để đặt lại mật khẩu mới.
+                  <p className="text-[11px] text-[#C5E5EC]/90 leading-relaxed">
+                    Mã xác thực 6 số đã được gửi tới <span className="font-bold text-white font-mono">{forgotContact.trim().includes('@') ? forgotContact.trim() : forgotContact.trim().replace(/^(\d{3})\d+(\d{3})$/, '$1***$2')}</span>. Vui lòng kiểm tra hộp thư (hoặc mục thư rác) để lấy mã.
+                  </p>
+                  {forgotContact.trim().includes('@') && (
+                    <div className="pt-1">
+                      <a
+                        href="https://mail.google.com"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-[#0E1B2E] border border-[#3064AE] text-[#C5E5EC] hover:text-white hover:bg-[#3064AE]/30 transition text-[11px] font-bold"
+                      >
+                        <ExternalLink className="w-3 h-3 text-[#C5E5EC]" />
+                        <span>Mở hộp thư Gmail</span>
+                      </a>
+                    </div>
+                  )}
+                  <p className="text-[10px] text-[#C5E5EC]/60 italic">
+                    * Tuyệt đối không chia sẻ mã xác thực OTP với bất kỳ ai để bảo vệ an toàn tài khoản.
                   </p>
                 </div>
               )}

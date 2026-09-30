@@ -72,31 +72,12 @@
         }, true);
       })();
 
-      // Global Dark Theme Default Pre-hydration Loader
+      // Global Dark Theme Enforcer (Giao diện tối mặc định 100%)
       (function() {
         try {
-          var storedTheme = localStorage.getItem('gigme_theme_mode') || localStorage.getItem('theme');
-          var isDark = true; // GIAO DIỆN TỐI (CYBER DARK) LÀ MẶC ĐỊNH 100%
-          if (storedTheme === 'DAYLIGHT' || storedTheme === 'light') {
-            isDark = false;
-          } else if (storedTheme === 'CYBER_DARK' || storedTheme === 'AMOLED' || storedTheme === 'dark') {
-            isDark = true;
-          } else {
-            // Mặc định luôn ưu tiên Dark Mode chuẩn của GigMe
-            isDark = true;
-          }
-          if (isDark) {
-            document.documentElement.classList.add('dark');
-            document.documentElement.classList.remove('light', 'theme-daylight');
-            if (storedTheme === 'AMOLED') {
-              document.documentElement.classList.add('theme-amoled');
-            } else {
-              document.documentElement.classList.add('theme-cyber');
-            }
-          } else {
-            document.documentElement.classList.remove('dark', 'theme-amoled', 'theme-cyber');
-            document.documentElement.classList.add('light', 'theme-daylight');
-          }
+          localStorage.setItem('gigme_theme_mode', 'CYBER_DARK');
+          document.documentElement.classList.add('dark', 'theme-cyber');
+          document.documentElement.classList.remove('light', 'theme-daylight', 'theme-amoled');
         } catch (e) {}
       })();
     </script>

@@ -454,6 +454,19 @@ export const ChatSupportScreen: React.FC<ChatSupportScreenProps> = ({ onBack }) 
     }
   };
 
+  // Reset conversation and input state when switching user accounts
+  useEffect(() => {
+    setActiveConversationId(null);
+    setMessageInput('');
+    setPendingImage(null);
+    setPendingVideo(null);
+    setShowAddFriendModal(false);
+    setShowContactInfoModal(false);
+    setShowNewChatModal(false);
+    setShowBackupModal(false);
+    setShowTermsModal(false);
+  }, [currentUser?.id]);
+
   // Mark active conversation messages as read
   useEffect(() => {
     if (activeConversationId && markConversationAsRead) {

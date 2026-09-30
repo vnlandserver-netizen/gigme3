@@ -51,18 +51,14 @@ export const VietQrOpenApiAutoScanner: React.FC<VietQrOpenApiAutoScannerProps> =
   // Dynamic system bank details configured by Admin
   const [systemBank, setSystemBank] = useState({
     accountNumber: '0909120918',
-    accountHolder: 'NGUYEN VAN AN',
+    accountHolder: 'LY HOANG GIA BAO',
     bankName: 'MBBank',
     bankCode: 'MB',
   });
 
-  // Generate distinct transfer code for user dynamically
-  const userIdentifier =
-    currentUser?.phone ||
-    currentUser?.email?.split('@')[0]?.toUpperCase() ||
-    currentUser?.id?.replace('user_', '').toUpperCase() ||
-    'VIETNAM';
-  const transferSyntax = `GIGME ${userIdentifier}`;
+  // Generate distinct transfer code for user dynamically: GIGME <id tài khoản muốn nạp tiền>
+  const userAccountId = currentUser?.id || '000000000';
+  const transferSyntax = `GIGME ${userAccountId}`;
   const accountNumber = systemBank.accountNumber;
   const accountHolder = systemBank.accountHolder;
 
@@ -80,7 +76,7 @@ export const VietQrOpenApiAutoScanner: React.FC<VietQrOpenApiAutoScannerProps> =
         if (cfg && cfg.accountNumber) {
           setSystemBank({
             accountNumber: cfg.accountNumber,
-            accountHolder: cfg.accountHolder || 'CHỦ TÀI KHOẢN GIGME',
+            accountHolder: cfg.accountHolder || 'LY HOANG GIA BAO',
             bankName: cfg.bankName || 'MBBank',
             bankCode: cfg.bankCode || 'MB',
           });
@@ -165,8 +161,16 @@ export const VietQrOpenApiAutoScanner: React.FC<VietQrOpenApiAutoScannerProps> =
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-3 sm:p-4 animate-fade-in overflow-y-auto">
-      <div className="w-full max-w-lg rounded-3xl bg-[#0B1322] border-2 border-[#00E5FF]/40 p-5 sm:p-6 text-white shadow-[0_0_50px_rgba(0,229,255,0.2)] my-8">
+    <div
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-3 sm:p-4 animate-fade-in overflow-y-auto"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-lg rounded-3xl bg-[#0B1322] border-2 border-[#00E5FF]/40 p-5 sm:p-6 text-white shadow-[0_0_50px_rgba(0,229,255,0.2)] my-8"
+      >
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-slate-800">
           <div className="flex items-center space-x-2.5">

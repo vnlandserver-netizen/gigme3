@@ -419,9 +419,9 @@ export interface AiRecognitionResult {
 
 export const VIETNAMESE_BANKS = [
   { code: 'VCB', name: 'Vietcombank', fullName: 'Ngân hàng TMCP Ngoại thương Việt Nam' },
-  { code: 'MB', name: 'MB Bank', fullName: 'Ngân hàng TMCP Quân Đội' },
+  { code: 'MB', name: 'MBBank', fullName: 'Ngân hàng TMCP Quân Đội' },
   { code: 'TCB', name: 'Techcombank', fullName: 'Ngân hàng TMCP Kỹ thương Việt Nam' },
-  { code: 'VPB', name: 'VPBank', fullName: 'Ngân hàng TMCP Việt Nam Thịnh Vượng' },
+  { code: 'MOMO', name: 'MoMo', fullName: 'Ví Điện Tử MoMo (Napas 247)' },
   { code: 'ACB', name: 'ACB', fullName: 'Ngân hàng TMCP Á Châu' },
   { code: 'BIDV', name: 'BIDV', fullName: 'Ngân hàng TMCP Đầu tư và Phát triển Việt Nam' },
   { code: 'CTG', name: 'VietinBank', fullName: 'Ngân hàng TMCP Công Thương Việt Nam' },

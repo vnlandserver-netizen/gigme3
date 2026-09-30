@@ -95,8 +95,16 @@ export const DownloadAppDialog: React.FC<DownloadAppDialogProps> = ({ isOpen, on
   )}&bgcolor=FFFFFF&color=3064AE&margin=1`;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-3 sm:p-4 animate-fade-in">
-      <div className="w-full max-w-lg rounded-3xl bg-[#0E1A2D] border border-[#C5E5EC]/25 p-5 sm:p-6 text-slate-100 shadow-2xl relative max-h-[92vh] overflow-y-auto animate-modal-in">
+    <div
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-3 sm:p-4 animate-fade-in"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-lg rounded-3xl bg-[#0E1A2D] border border-[#C5E5EC]/25 p-5 sm:p-6 text-slate-100 shadow-2xl relative max-h-[92vh] overflow-y-auto animate-modal-in"
+      >
         {/* Top Brand Gradient Strip (Cobalt 60% -> Crystal 30% -> Ethereal 10%) */}
         <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-[#3064AE] via-[#437DD2] to-[#C5E5EC]" />
 

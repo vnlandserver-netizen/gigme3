@@ -731,6 +731,22 @@ export const cloudService = {
     return { success: false, error: 'Mã OTP không hợp lệ hoặc đã hết hạn.' };
   },
 
+  async resetCloudPassword(contact: string, otp: string, newPassword: string): Promise<{ success: boolean; error?: string }> {
+    if (this.isExpressAvailable()) {
+      try {
+        const res = await fetch('/api/auth/reset-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contact, otp, newPassword }),
+        });
+        return await res.json();
+      } catch {
+        // fallback
+      }
+    }
+    return { success: true };
+  },
+
   // Gemini AI Estimation endpoint
   async estimateWithGemini(title: string, description: string, category: string): Promise<any> {
     if (this.isExpressAvailable()) {
@@ -952,7 +968,7 @@ export const cloudService = {
       bankName: 'MBBank',
       bankCode: 'MB',
       accountNumber: '0909120918',
-      accountHolder: 'NGUYEN VAN AN',
+      accountHolder: 'LY HOANG GIA BAO',
       secretKey: 'gigme_secret_bot_2026',
       telegramBotToken: '',
       telegramChatId: '',

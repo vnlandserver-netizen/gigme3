@@ -142,7 +142,7 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ onBa
     bankName: 'MBBank',
     bankCode: 'MB',
     accountNumber: '0909120918',
-    accountHolder: 'NGUYEN VAN AN',
+    accountHolder: 'LY HOANG GIA BAO',
     secretKey: 'gigme_secret_bot_2026',
     telegramBotToken: '',
     telegramChatId: '',
@@ -1939,7 +1939,7 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ onBa
                           accountHolder: e.target.value.toUpperCase(),
                         }))
                       }
-                      placeholder="Ví dụ: NGUYEN VAN AN"
+                      placeholder="Ví dụ: LY HOANG GIA BAO"
                       className="w-full px-3.5 py-2.5 rounded-xl bg-[#12233B] border border-[#C5E5EC]/25 text-white font-bold text-sm focus:border-emerald-400 focus:outline-none"
                     />
                   </div>

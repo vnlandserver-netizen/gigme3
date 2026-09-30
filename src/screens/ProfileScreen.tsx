@@ -66,7 +66,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
     setWalletPin,
     toggleBiometrics,
     isDarkMode,
-    toggleDarkMode,
     isMaintenanceActive,
     maintenanceConfig,
     showNotification,
@@ -926,49 +925,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           </div>
           <ChevronRight className="w-4 h-4 text-[#C5E5EC]/60" />
         </button>
-
-        {/* GLOBAL THEME TOGGLE (DARK / LIGHT MODE) */}
-        <div className="w-full p-3.5 rounded-2xl bg-white dark:bg-[#12233B] border border-slate-200 dark:border-[#C5E5EC]/15 shadow-sm flex items-center justify-between transition-colors duration-200">
-          <div className="flex items-center space-x-3">
-            <div className={`p-2 rounded-xl transition-colors duration-200 ${
-              isDarkMode ? 'bg-indigo-950/60 text-cyan-300' : 'bg-amber-100 text-amber-600'
-            }`}>
-              {isDarkMode ? <Moon className="w-4 h-4 fill-cyan-400/20" /> : <Sun className="w-4 h-4 fill-amber-400" />}
-            </div>
-            <div>
-              <h4 className="font-extrabold text-slate-900 dark:text-white text-xs">
-                {isDarkMode ? 'Chế Độ Giao Diện Tối (Dark Mode)' : 'Chế Độ Giao Diện Sáng (Daylight)'}
-              </h4>
-              <p className="text-[10px] text-slate-500 dark:text-[#C5E5EC]/70">
-                {isDarkMode ? 'Bảo vệ mắt ban đêm, tiết kiệm pin tối đa' : 'Hiển thị sáng rõ nét dưới ánh sáng ban ngày'}
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={() => {
-              triggerHaptic('medium');
-              toggleDarkMode();
-            }}
-            className={`px-3 py-1.5 rounded-xl text-xs font-black transition active:scale-95 cursor-pointer flex items-center space-x-1.5 shadow-sm ${
-              isDarkMode
-                ? 'bg-amber-400/15 hover:bg-amber-400/25 text-amber-300 border border-amber-400/30'
-                : 'bg-[#3064AE] hover:bg-[#255294] text-white shadow-[#3064AE]/20'
-            }`}
-            title="Nhấn để đổi giao diện"
-          >
-            {isDarkMode ? (
-              <>
-                <Sun className="w-3.5 h-3.5 text-amber-400" />
-                <span>Bật Sáng</span>
-              </>
-            ) : (
-              <>
-                <Moon className="w-3.5 h-3.5 text-white" />
-                <span>Bật Tối</span>
-              </>
-            )}
-          </button>
-        </div>
 
         {/* PIN CHANGE */}
         <button
