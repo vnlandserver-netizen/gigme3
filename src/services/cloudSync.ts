@@ -584,6 +584,20 @@ export const cloudService = {
     }
   },
 
+  async deleteMarketplaceItem(itemId: string): Promise<void> {
+    await deleteMarketplaceItemFromCloud(itemId).catch((e) => console.warn('Firestore deleteMarketplace error:', e));
+
+    if (this.isExpressAvailable()) {
+      try {
+        await fetch(`/api/marketplace/${itemId}`, {
+          method: 'DELETE',
+        });
+      } catch {
+        // Safe ignore
+      }
+    }
+  },
+
   subscribeMarketplace(callback: (items: MarketplaceItemEntity[]) => void): Unsubscribe {
     const unsubFirestore = subscribeToMarketplace((items) => {
       if (items) callback(items);

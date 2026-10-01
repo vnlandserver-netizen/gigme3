@@ -24,6 +24,7 @@ import {
 import { useGigMe } from '../context/GigMeContext';
 import { formatVnd, MarketplaceItemEntity, MarketplaceMediaItem } from '../types';
 import { playNotificationSound } from '../utils/audio';
+import { triggerHaptic } from '../utils/haptics';
 
 // Dữ liệu chợ KTX: Khởi tạo trống 100% theo dữ liệu thật từ người dùng
 const INITIAL_MARKETPLACE_ITEMS: MarketplaceItemEntity[] = [];
@@ -32,7 +33,7 @@ export const CampusMarketplaceScreen: React.FC<{
   onOpenChat?: () => void;
   onOpenWallet?: () => void;
 }> = ({ onOpenChat, onOpenWallet }) => {
-  const { currentUser, showNotification } = useGigMe();
+  const { currentUser, showNotification, sendChat } = useGigMe();
   const [items, setItems] = useState<MarketplaceItemEntity[]>(() => {
     try {
       const saved = localStorage.getItem('gigme_marketplace_items_real_v4');
@@ -65,6 +66,46 @@ export const CampusMarketplaceScreen: React.FC<{
   const [dealFilter, setDealFilter] = useState<'ALL' | 'UNDER_50K' | 'FREE' | 'DORM'>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [selectedItemForDetail, setSelectedItemForDetail] = useState<MarketplaceItemEntity | null>(null);
+  const [activeMediaIndex, setActiveMediaIndex] = useState(0);
+
+  const handleChatWithSeller = (item: MarketplaceItemEntity) => {
+    triggerHaptic('light');
+    if (!currentUser) {
+      showNotification('Vui lòng đăng nhập', 'Bạn cần đăng nhập để trò chuyện với người bán.');
+      return;
+    }
+    if (item.sellerId === currentUser.id) {
+      showNotification('Món đồ của bạn', 'Đây là món đồ do chính bạn đăng bán!');
+      return;
+    }
+
+    sendChat(
+      `Chào bạn, mình quan tâm món đồ "${item.title}" (${item.price === 0 ? 'Tặng miễn phí 0đ' : formatVnd(item.price)}) bạn đang đăng trên Chợ KTX!`,
+      'NONE',
+      null,
+      0,
+      undefined,
+      undefined,
+      item.sellerId,
+      item.sellerName
+    );
+
+    showNotification('Đã mở cuộc trò chuyện 💬', `Đang chuyển sang phòng chat với ${item.sellerName}...`);
+    if (onOpenChat) {
+      onOpenChat();
+    }
+  };
+
+  const handleDeleteItem = async (itemId: string, itemTitle: string) => {
+    triggerHaptic('medium');
+    setItems((prev) => prev.filter((i) => i.id !== itemId));
+    await cloudService.deleteMarketplaceItem(itemId);
+    showNotification('Đã gỡ bài đăng', `Đã xóa "${itemTitle}" khỏi Chợ KTX.`);
+    if (selectedItemForDetail?.id === itemId) {
+      setSelectedItemForDetail(null);
+    }
+  };
 
   // New item form states
   const [newTitle, setNewTitle] = useState('');
@@ -347,7 +388,12 @@ export const CampusMarketplaceScreen: React.FC<{
         {filteredItems.map((item) => (
           <div
             key={item.id}
-            className="rounded-3xl bg-gradient-to-b from-[#111F35] to-[#0C1626] border border-[#C5E5EC]/20 overflow-hidden shadow-xl flex flex-col justify-between group hover:border-[#C5E5EC]/50 transition duration-200 relative"
+            className="rounded-3xl bg-gradient-to-b from-[#111F35] to-[#0C1626] border border-[#C5E5EC]/20 overflow-hidden shadow-xl flex flex-col justify-between group hover:border-[#C5E5EC]/50 transition duration-200 relative cursor-pointer"
+            onClick={() => {
+              triggerHaptic('light');
+              setSelectedItemForDetail(item);
+              setActiveMediaIndex(0);
+            }}
           >
             {/* Top Brand Accent Stripe */}
             <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-[#3064AE] via-[#C5E5EC] to-[#E0FAEB] opacity-70 group-hover:opacity-100 transition-opacity z-20" />
@@ -401,7 +447,7 @@ export const CampusMarketplaceScreen: React.FC<{
 
               {/* Info Body */}
               <div className="p-4 space-y-2 text-xs">
-                <h3 className="font-extrabold text-sm text-white line-clamp-2 leading-snug">
+                <h3 className="font-extrabold text-sm text-white line-clamp-2 leading-snug group-hover:text-emerald-300 transition-colors">
                   {item.title}
                 </h3>
                 <p className="text-slate-400 text-[11px] line-clamp-2 leading-relaxed">
@@ -416,38 +462,71 @@ export const CampusMarketplaceScreen: React.FC<{
             </div>
 
             {/* Footer Action */}
-            <div className="p-4 pt-0 border-t border-slate-800/80 mt-2">
-              <div className="flex items-center justify-between py-2 text-[11px] text-slate-400">
-                <span>Người đăng: <strong>{item.sellerName}</strong></span>
-                <span className="text-emerald-400 font-bold flex items-center space-x-0.5">
+            <div className="p-4 pt-0 border-t border-slate-800/80 mt-2 space-y-2">
+              <div className="flex items-center justify-between py-1 text-[11px] text-slate-400">
+                <div className="flex items-center space-x-1.5 truncate max-w-[65%]">
+                  <span className="truncate">Người đăng: <strong className="text-white">{item.sellerName}</strong></span>
+                  {(currentUser?.id === item.sellerId || currentUser?.role === 'ADMIN' || currentUser?.id === '000000000') && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteItem(item.id, item.title);
+                      }}
+                      className="p-1 text-slate-400 hover:text-rose-400 rounded hover:bg-rose-500/10 transition cursor-pointer"
+                      title="Gỡ tin đăng này"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+                <span className="text-emerald-400 font-bold flex items-center space-x-0.5 shrink-0 text-[10px]">
                   <ShieldCheck className="w-3 h-3" />
                   <span>Escrow Bảo Lãnh</span>
                 </span>
               </div>
 
-              <button
-                disabled={item.status === 'RESERVED'}
-                onClick={() => handleEscrowHold(item)}
-                className={`w-full py-2.5 rounded-xl font-extrabold text-xs transition flex items-center justify-center space-x-1.5 shadow-md ${
-                  item.status === 'RESERVED'
-                    ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
-                    : item.price === 0
-                    ? 'bg-gradient-to-r from-emerald-500 to-teal-400 text-black hover:brightness-110 shadow-emerald-500/20'
-                    : 'bg-[#131E30] hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
-                }`}
-              >
-                {item.price === 0 ? (
-                  <>
-                    <Gift className="w-4 h-4" />
-                    <span>Nhận Quà Tặng 0đ Ngay</span>
-                  </>
-                ) : (
-                  <>
-                    <Lock className="w-3.5 h-3.5" />
-                    <span>Đặt Cọc Giữ Món (Escrow)</span>
-                  </>
-                )}
-              </button>
+              <div className="flex items-center space-x-2">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleChatWithSeller(item);
+                  }}
+                  className="py-2 px-3 rounded-xl bg-[#12233B] hover:bg-[#182C48] text-cyan-300 font-bold text-xs border border-cyan-500/30 flex items-center justify-center space-x-1 transition cursor-pointer"
+                  title="Nhắn tin với người bán"
+                >
+                  <MessageSquare className="w-3.5 h-3.5" />
+                  <span>Nhắn Tin</span>
+                </button>
+
+                <button
+                  disabled={item.status === 'RESERVED'}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleEscrowHold(item);
+                  }}
+                  className={`flex-1 py-2 px-3 rounded-xl font-extrabold text-xs transition flex items-center justify-center space-x-1.5 shadow-md cursor-pointer ${
+                    item.status === 'RESERVED'
+                      ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                      : item.price === 0
+                      ? 'bg-gradient-to-r from-emerald-500 to-teal-400 text-black hover:brightness-110 shadow-emerald-500/20'
+                      : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:brightness-110 text-white shadow-emerald-900/40 border border-emerald-400/30'
+                  }`}
+                >
+                  {item.price === 0 ? (
+                    <>
+                      <Gift className="w-4 h-4" />
+                      <span>Nhận 0đ</span>
+                    </>
+                  ) : (
+                    <>
+                      <Lock className="w-3.5 h-3.5" />
+                      <span>Cọc Giữ Món</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         ))}
@@ -477,8 +556,16 @@ export const CampusMarketplaceScreen: React.FC<{
 
       {/* Modal: Create Item Listing */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in overflow-y-auto">
-          <div className="w-full max-w-lg rounded-3xl bg-[#0F172A] border-2 border-emerald-500/40 p-6 text-white shadow-2xl my-8 space-y-4">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowCreateModal(false);
+          }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in overflow-y-auto"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-lg rounded-3xl bg-[#0F172A] border-2 border-emerald-500/40 p-6 text-white shadow-2xl my-8 space-y-4"
+          >
             <div className="flex justify-between items-center pb-3 border-b border-slate-800">
               <div className="flex items-center space-x-2">
                 <BookOpen className="w-5 h-5 text-emerald-400" />

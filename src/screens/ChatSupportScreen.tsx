@@ -418,11 +418,12 @@ export const ChatSupportScreen: React.FC<ChatSupportScreenProps> = ({ onBack }) 
   const currentConversationMessages = useMemo(() => {
     if (!activeConversationId || !currentUser) return [];
     const dmThreadId = getDirectThreadId(currentUser.id, activeConversationId);
+    const dmAltThreadId = `dm_${[currentUser.id, activeConversationId].sort().join('_')}`;
     const gigId = activeContact?.associatedGig?.id;
 
     return (allChats || []).filter((msg) => {
-      // 1. Direct thread match
-      if (msg.threadId === dmThreadId) return true;
+      // 1. Direct thread match (Rule 3.4 standard direct_ & fallback dm_)
+      if (msg.threadId === dmThreadId || msg.threadId === dmAltThreadId) return true;
 
       // 2. Explicit direct pair between currentUser and activeConversationId
       const isDirectPair =
@@ -593,9 +594,10 @@ export const ChatSupportScreen: React.FC<ChatSupportScreenProps> = ({ onBack }) 
   const getLastMessageForContact = (contactId: string, associatedGigId?: string) => {
     if (!currentUser) return null;
     const dmThreadId = getDirectThreadId(currentUser.id, contactId);
+    const dmAltThreadId = `dm_${[currentUser.id, contactId].sort().join('_')}`;
 
     const relevant = (allChats || []).filter((m) => {
-      if (m.threadId === dmThreadId) return true;
+      if (m.threadId === dmThreadId || m.threadId === dmAltThreadId) return true;
       const isDirectPair =
         (m.senderId === currentUser.id && m.partnerId === contactId) ||
         (m.senderId === contactId && (m.partnerId === currentUser.id || (!m.partnerId && m.threadId?.includes(currentUser.id))));
@@ -615,10 +617,11 @@ export const ChatSupportScreen: React.FC<ChatSupportScreenProps> = ({ onBack }) 
   const getUnreadCountForContact = (contactId: string, associatedGigId?: string): number => {
     if (!currentUser) return 0;
     const dmThreadId = getDirectThreadId(currentUser.id, contactId);
+    const dmAltThreadId = `dm_${[currentUser.id, contactId].sort().join('_')}`;
 
     return (allChats || []).filter((m) => {
       if (m.senderId === currentUser.id || m.isRead) return false;
-      if (m.threadId === dmThreadId) return true;
+      if (m.threadId === dmThreadId || m.threadId === dmAltThreadId) return true;
       const isDirectPair =
         m.senderId === contactId &&
         (m.partnerId === currentUser.id || (!m.partnerId && m.threadId?.includes(currentUser.id)));
@@ -1879,8 +1882,16 @@ export const ChatSupportScreen: React.FC<ChatSupportScreenProps> = ({ onBack }) 
 
         {/* MODAL: CONTACT DETAILS INFO */}
         {showContactInfoModal && (
-          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="w-full max-w-sm rounded-3xl bg-[#0B1528] border border-slate-700 p-5 shadow-2xl text-slate-200">
+          <div
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setShowContactInfoModal(false);
+            }}
+            className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-sm rounded-3xl bg-[#0B1528] border border-slate-700 p-5 shadow-2xl text-slate-200"
+            >
               <div className="flex items-center justify-between pb-3 border-b border-slate-800">
                 <h4 className="font-extrabold text-sm text-white">Hồ sơ Campus Messenger</h4>
                 <button
@@ -2058,8 +2069,20 @@ export const ChatSupportScreen: React.FC<ChatSupportScreenProps> = ({ onBack }) 
 
       {/* 9-DIGIT ID SYSTEM & QUICK FRIEND SEARCH - CHỈ HIỆN KHI BẤM NÚT ADDFRIEND */}
       {showAddFriendModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="w-full max-w-md rounded-3xl bg-[#0E1B2E] border border-[#C5E5EC]/30 p-5 shadow-2xl text-slate-100 flex flex-col space-y-3.5 max-h-[90vh] overflow-y-auto">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowAddFriendModal(false);
+              setSearchIdError('');
+              setFoundUserResult(null);
+            }
+          }}
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md rounded-3xl bg-[#0E1B2E] border border-[#C5E5EC]/30 p-5 shadow-2xl text-slate-100 flex flex-col space-y-3.5 max-h-[90vh] overflow-y-auto"
+          >
             {/* Modal Header */}
             <div className="flex items-center justify-between pb-2 border-b border-[#C5E5EC]/15 shrink-0">
               <div className="flex items-center space-x-2">
@@ -2498,8 +2521,16 @@ export const ChatSupportScreen: React.FC<ChatSupportScreenProps> = ({ onBack }) 
 
       {/* MODAL: START NEW CHAT WITH ANY STUDENT */}
       {showNewChatModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="w-full max-w-md rounded-3xl bg-[#0E1B2E] border border-[#C5E5EC]/30 p-5 shadow-2xl text-slate-100 flex flex-col max-h-[80vh]">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowNewChatModal(false);
+          }}
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md rounded-3xl bg-[#0E1B2E] border border-[#C5E5EC]/30 p-5 shadow-2xl text-slate-100 flex flex-col max-h-[80vh]"
+          >
             <div className="flex items-center justify-between pb-3 border-b border-[#C5E5EC]/15 shrink-0">
               <h4 className="font-extrabold text-sm text-white flex items-center space-x-1.5">
                 <MessageCircle className="w-4 h-4 text-[#C5E5EC]" />

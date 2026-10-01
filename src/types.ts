@@ -98,6 +98,7 @@ export interface UserEntity {
   fcmToken?: string;
   safeWalkContact?: { name: string; phone: string }; // Người liên hệ khẩn cấp SafeWalk
   avatarUrl?: string; // Ảnh đại diện người dùng tùy chỉnh
+  bio?: string; // Giới thiệu bản thân / Slogan cá nhân sinh viên
   themePreference?: 'CYBER_DARK' | 'AMOLED' | 'DAYLIGHT'; // Tùy chọn giao diện
   cccdNumber?: string; // Số CCCD 12 số
   cccdIssueDate?: string; // Ngày cấp CCCD

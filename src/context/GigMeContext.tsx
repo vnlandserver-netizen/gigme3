@@ -4916,12 +4916,12 @@ export const GigMeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const actualSenderId = customSenderId || currentUser.id;
     const actualSenderName = customSenderName || currentUser.name;
 
-    // Normalize direct messaging thread ID between both users to avoid cross-talk leakages
+    // Normalize direct messaging thread ID between both users to avoid cross-talk leakages (Rule 3.4)
     let effectiveThreadId = targetThreadId;
-    if (!effectiveThreadId || effectiveThreadId === 'direct_general' || effectiveThreadId.startsWith('direct_')) {
+    if (!effectiveThreadId || effectiveThreadId === 'direct_general' || effectiveThreadId.startsWith('direct_') || effectiveThreadId.startsWith('dm_')) {
       if (targetPartnerId) {
         const sorted = [currentUser.id, targetPartnerId].sort();
-        effectiveThreadId = `dm_${sorted[0]}_${sorted[1]}`;
+        effectiveThreadId = ['direct', ...sorted].join('_');
       } else if (selectedGigId) {
         effectiveThreadId = selectedGigId;
       } else {

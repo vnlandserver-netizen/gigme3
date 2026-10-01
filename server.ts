@@ -1676,6 +1676,15 @@ async function startServer() {
     res.json({ success: true, item });
   });
 
+  app.delete('/api/marketplace/:id', (req: Request, res: Response) => {
+    const { id } = req.params;
+    const db = ensureDbExists();
+    db.marketplace = (db.marketplace || []).filter((m: any) => m.id !== id);
+    writeDb(db);
+    broadcastSse('marketplace_saved', { id, isDeleted: true });
+    res.json({ success: true, deletedId: id });
+  });
+
   // 8. Transactions with Anti-Dupe Protection
   app.get('/api/transactions', (_req: Request, res: Response) => {
     const db = ensureDbExists();
@@ -2141,24 +2150,49 @@ async function startServer() {
     }
 
     // Match user by GIGME syntax in transfer content
-    // e.g. "GIGME 0909120918" or "GIGME USER123" or "GIGME 526H0044"
+    // e.g. "GIGME 0909120918" or "GIGME000000002" or "GIGME_000000002" or "MBVCB.GIGME 000000002"
     const upperContent = content.toUpperCase();
+    
+    // Extract potential target identifier directly from GIGME tag if present
+    const gigmeTagMatch = upperContent.match(/GIGME[\s_\-\.:]*([A-Z0-9]+)/i);
+    const targetTag = gigmeTagMatch ? gigmeTagMatch[1].toUpperCase() : '';
+
     let matchedUser = db.users.find((u: any) => {
-      if (u.phone && upperContent.includes(u.phone)) return true;
+      // 1. Direct match with extracted GIGME target tag
+      if (targetTag) {
+        if (u.id && u.id.toUpperCase() === targetTag) return true;
+        if (u.id && u.id.replace('user_', '').toUpperCase() === targetTag) return true;
+        if (u.phone) {
+          const rawPhone = u.phone.replace(/[^0-9]/g, '');
+          const rawTag = targetTag.replace(/[^0-9]/g, '');
+          if (rawPhone && rawTag && (rawPhone === rawTag || rawPhone.endsWith(rawTag) || rawTag.endsWith(rawPhone))) {
+            return true;
+          }
+        }
+        if (u.email && u.email.toUpperCase().split('@')[0] === targetTag) return true;
+      }
+
+      // 2. Fallback check across full content
+      if (u.phone) {
+        const rawPhone = u.phone.replace(/[^0-9]/g, '');
+        if (rawPhone && (upperContent.includes(rawPhone) || (rawPhone.startsWith('0') && upperContent.includes(rawPhone.slice(1))))) {
+          return true;
+        }
+      }
       if (u.id && upperContent.includes(u.id.replace('user_', '').toUpperCase())) return true;
       if (u.email && upperContent.includes(u.email.split('@')[0].toUpperCase())) return true;
       return false;
     });
 
-    // If still no direct match, try matching from GIGME code pattern
+    // If still no direct match, try matching from GIGME space-separated parts
     if (!matchedUser) {
-      const parts = upperContent.split(/\s+/);
+      const parts = upperContent.split(/[\s_\-\.]+/);
       const gigmeIndex = parts.findIndex((p: string) => p.includes('GIGME'));
       if (gigmeIndex !== -1 && parts[gigmeIndex + 1]) {
         const keyword = parts[gigmeIndex + 1];
         matchedUser = db.users.find(
           (u: any) =>
-            (u.phone && u.phone.includes(keyword)) ||
+            (u.phone && (u.phone.includes(keyword) || keyword.includes(u.phone))) ||
             (u.id && u.id.toUpperCase().includes(keyword)) ||
             (u.email && u.email.toUpperCase().includes(keyword))
         );

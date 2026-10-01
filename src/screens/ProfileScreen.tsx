@@ -31,6 +31,7 @@ import {
   Cloud,
   FileText,
   Mail,
+  Edit3,
 } from 'lucide-react';
 import { useGigMe } from '../context/GigMeContext';
 import { USER_TIERS, formatVnd } from '../types';
@@ -69,6 +70,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
     isMaintenanceActive,
     maintenanceConfig,
     showNotification,
+    updateUserProfile,
   } = useGigMe();
 
   const [skills, setSkills] = useState<string[]>([
@@ -85,11 +87,45 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const [showEduModal, setShowEduModal] = useState(false);
   const [showBackupModal, setShowBackupModal] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
+  const [showEditProfileModal, setShowEditProfileModal] = useState(false);
+
+  const [editName, setEditName] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [editSchool, setEditSchool] = useState('');
+  const [editBio, setEditBio] = useState('');
+
   const [oldPin, setOldPin] = useState('');
   const [newPin, setNewPin] = useState('');
   const [simulatedAlert, setSimulatedAlert] = useState(false);
 
   if (!currentUser) return null;
+
+  const handleOpenEditModal = () => {
+    triggerHaptic('light');
+    setEditName(currentUser.name || '');
+    setEditPhone(currentUser.phone || '');
+    setEditSchool(currentUser.studentSchool || '');
+    setEditBio(currentUser.bio || '');
+    setShowEditProfileModal(true);
+  };
+
+  const handleSaveProfile = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editName.trim()) {
+      triggerHaptic('error');
+      showNotification('Lỗi', 'Họ và tên không được để trống.');
+      return;
+    }
+    triggerHaptic('success');
+    updateUserProfile({
+      name: editName.trim(),
+      phone: editPhone.trim(),
+      studentSchool: editSchool.trim(),
+      bio: editBio.trim(),
+    });
+    showNotification('Cập nhật thành công! ✨', 'Hồ sơ cá nhân của bạn đã được lưu.');
+    setShowEditProfileModal(false);
+  };
 
   const currentTierConfig = USER_TIERS[currentUser.tier];
   const isSuperAdmin =
@@ -227,8 +263,25 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 >
                   <Sparkles className="w-3 h-3 mr-0.5" /> Đổi avatar
                 </button>
+                <button
+                  type="button"
+                  onClick={handleOpenEditModal}
+                  className="text-[10px] text-cyan-300 hover:text-white font-semibold flex items-center space-x-0.5 ml-1 px-2 py-0.5 rounded-lg bg-cyan-500/15 border border-cyan-400/30 transition cursor-pointer active:scale-95"
+                  title="Chỉnh sửa họ tên, số điện thoại, trường học, giới thiệu"
+                >
+                  <Edit3 className="w-3 h-3 mr-0.5" /> Sửa hồ sơ
+                </button>
               </div>
-              <p className="text-[#C5E5EC]/70 mt-0.5 truncate text-[11px]">{currentUser.email || currentUser.phone}</p>
+              <p className="text-[#C5E5EC]/70 mt-0.5 truncate text-[11px]">
+                {currentUser.studentSchool ? `${currentUser.studentSchool} • ` : ''}
+                {currentUser.email || currentUser.phone}
+              </p>
+
+              {currentUser.bio && (
+                <p className="text-[11px] text-[#C5E5EC]/90 italic bg-white/[0.04] px-2.5 py-1 rounded-xl border border-white/10 mt-1 max-w-md line-clamp-2">
+                  "{currentUser.bio}"
+                </p>
+              )}
               
               {/* ID 9 CHỮ SỐ RIÊNG BIỆT */}
               <div className="flex items-center space-x-2 mt-1.5 flex-wrap gap-y-1">
@@ -1029,8 +1082,16 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
       {/* CHANGE PIN MODAL */}
       {showPinModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
-          <div className="w-full max-w-md rounded-2xl bg-[#0E1B2E] border border-[#C5E5EC]/30 p-6 text-white shadow-2xl">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowPinModal(false);
+          }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md rounded-2xl bg-[#0E1B2E] border border-[#C5E5EC]/30 p-6 text-white shadow-2xl"
+          >
             <div className="flex justify-between items-center pb-3 border-b border-[#C5E5EC]/20">
               <h3 className="font-extrabold text-sm flex items-center space-x-1.5 text-[#C5E5EC]">
                 <KeyRound className="w-4 h-4" />
@@ -1074,6 +1135,103 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
               >
                 Cập Nhật Mã PIN
               </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT PROFILE MODAL */}
+      {showEditProfileModal && (
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowEditProfileModal(false);
+          }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in overflow-y-auto"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-lg rounded-3xl bg-[#0E1B2E] border border-cyan-500/30 p-5 sm:p-6 text-white shadow-2xl my-6 space-y-4"
+          >
+            <div className="flex justify-between items-center pb-3 border-b border-[#C5E5EC]/20">
+              <div className="flex items-center space-x-2">
+                <div className="p-2 rounded-xl bg-cyan-500/20 text-cyan-300">
+                  <Edit3 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm text-white">Chỉnh Sửa Hồ Sơ Cá Nhân</h3>
+                  <p className="text-[10px] text-[#C5E5EC]/70">Cập nhật thông tin hiển thị với cộng đồng sinh viên</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowEditProfileModal(false)}
+                className="p-1 rounded-xl text-[#C5E5EC]/70 hover:text-white hover:bg-white/10 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveProfile} className="space-y-3.5 text-xs">
+              <div>
+                <label className="block text-[#C5E5EC]/80 mb-1 font-bold">Họ và tên hiển thị *</label>
+                <input
+                  type="text"
+                  required
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#12233B] border border-[#C5E5EC]/30 text-white font-bold text-xs focus:outline-none focus:border-cyan-400"
+                  placeholder="Ví dụ: Nguyễn Văn An"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[#C5E5EC]/80 mb-1 font-bold">Số điện thoại liên hệ</label>
+                <input
+                  type="tel"
+                  value={editPhone}
+                  onChange={(e) => setEditPhone(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#12233B] border border-[#C5E5EC]/30 text-white font-mono text-xs focus:outline-none focus:border-cyan-400"
+                  placeholder="Ví dụ: 0909120918"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[#C5E5EC]/80 mb-1 font-bold">Trường Đại Học / Cao Đẳng / Ký Túc Xá</label>
+                <input
+                  type="text"
+                  value={editSchool}
+                  onChange={(e) => setEditSchool(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#12233B] border border-[#C5E5EC]/30 text-white text-xs focus:outline-none focus:border-cyan-400"
+                  placeholder="Ví dụ: ĐH Tôn Đức Thắng (TDTU) - KTX Khu B"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[#C5E5EC]/80 mb-1 font-bold">Giới thiệu bản thân (Bio / Slogan)</label>
+                <textarea
+                  rows={3}
+                  value={editBio}
+                  onChange={(e) => setEditBio(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#12233B] border border-[#C5E5EC]/30 text-white text-xs focus:outline-none focus:border-cyan-400"
+                  placeholder="Ví dụ: Sinh viên năm 3 chăm chỉ, chuyên gia sư Toán & hỗ trợ cài máy tính, giao hàng KTX siêu nhanh!"
+                />
+              </div>
+
+              <div className="flex items-center space-x-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowEditProfileModal(false)}
+                  className="flex-1 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-[#C5E5EC] font-bold text-xs transition cursor-pointer"
+                >
+                  Hủy Bỏ
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:brightness-110 text-white font-extrabold text-xs shadow-lg shadow-cyan-900/40 transition cursor-pointer"
+                >
+                  Lưu Thay Đổi
+                </button>
+              </div>
             </form>
           </div>
         </div>

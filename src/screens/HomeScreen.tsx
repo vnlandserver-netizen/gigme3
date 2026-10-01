@@ -24,6 +24,7 @@ import {
   ShieldAlert,
   WifiOff,
   Navigation,
+  Bike,
 } from 'lucide-react';
 import { useGigMe } from '../context/GigMeContext';
 import { formatVnd, GigEntity } from '../types';
@@ -41,6 +42,9 @@ const VoiceSearchDialog = lazy(() =>
 );
 const OfflineGigsModal = lazy(() =>
   import('../components/OfflineGigsModal').then((m) => ({ default: m.OfflineGigsModal }))
+);
+const CampusRideModal = lazy(() =>
+  import('../components/CampusRideModal').then((m) => ({ default: m.CampusRideModal }))
 );
 
 
@@ -60,6 +64,7 @@ interface HomeScreenProps {
 const CATEGORIES = [
   'Tất cả',
   'Flash Gigs',
+  'Xe & Đi ké Campus',
   'Cày Game & Rank',
   'Tư vấn & Học tập',
   'Digital Tasks',
@@ -69,6 +74,8 @@ const CATEGORIES = [
 
 const getCategoryBadgeStyle = (category: string) => {
   switch (category) {
+    case 'Xe & Đi ké Campus':
+      return 'text-amber-300 bg-amber-950/60 border-amber-500/40';
     case 'Cày Game & Rank':
       return 'text-purple-300 bg-purple-950/60 border-purple-500/40';
     case 'Tư vấn & Học tập':
@@ -130,6 +137,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [isVoiceOpen, setIsVoiceOpen] = useState(false);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [isOfflineModalOpen, setIsOfflineModalOpen] = useState(false);
+  const [showRideModal, setShowRideModal] = useState(false);
   const isClient = roleMode === 'CLIENT';
 
   const handlePullRefresh = async () => {
@@ -229,6 +237,26 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               <p className="text-[10px] text-[#C5E5EC]/70 font-medium truncate">Trao đổi đồ KTX</p>
             </button>
           )}
+
+          {/* Quick Action: Xe & Đi Ké Campus */}
+          <button
+            onClick={() => {
+              triggerHaptic('medium');
+              setShowRideModal(true);
+            }}
+            className="min-w-[135px] sm:min-w-0 p-3 rounded-2xl bg-gradient-to-br from-[#162740] to-[#261E0A] hover:from-[#1A3152] hover:to-[#33280D] border border-amber-500/40 hover:border-amber-400 text-left transition group shadow-sm shrink-0 snap-start active:scale-95 cursor-pointer"
+          >
+            <div className="flex items-center justify-between mb-1.5">
+              <div className="p-1.5 rounded-lg bg-amber-500/25 text-amber-300 shadow-xs border border-amber-500/35">
+                <Bike className="w-4 h-4 group-hover:scale-110 transition" />
+              </div>
+              <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/40 font-black shadow-2xs">
+                10k - 20k
+              </span>
+            </div>
+            <h5 className="font-black text-white text-xs truncate">Xe & Đi Ké Campus</h5>
+            <p className="text-[10px] text-amber-300/80 font-medium truncate">Xe ôm • Về quê</p>
+          </button>
 
           {onOpenVietQrScanner && (
             <button
@@ -717,6 +745,17 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             isOpen={isOfflineModalOpen}
             onClose={() => setIsOfflineModalOpen(false)}
             onSelectGig={(id) => onSelectGigDetail(id)}
+          />
+        </Suspense>
+      )}
+
+      {/* Campus Ride Modal (Xe Sinh Viên & Đi Ké) */}
+      {showRideModal && (
+        <Suspense fallback={null}>
+          <CampusRideModal
+            isOpen={showRideModal}
+            onClose={() => setShowRideModal(false)}
+            onGigCreated={(gigId) => onSelectGigDetail(gigId)}
           />
         </Suspense>
       )}

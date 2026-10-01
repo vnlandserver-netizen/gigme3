@@ -850,8 +850,16 @@ export const GigDetailScreen: React.FC<GigDetailScreenProps> = ({
 
       {/* Reverse Auction Bid Submission Modal */}
       {showBidModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
-          <div className="w-full max-w-md rounded-3xl bg-[#0E1B2E] border border-[#C5E5EC]/30 p-6 text-white shadow-2xl relative overflow-hidden">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowBidModal(false);
+          }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md rounded-3xl bg-[#0E1B2E] border border-[#C5E5EC]/30 p-6 text-white shadow-2xl relative overflow-hidden"
+          >
             <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-[#3064AE] via-[#C5E5EC] to-[#E0FAEB]" />
             <div className="flex justify-between items-center pb-3 border-b border-[#C5E5EC]/20">
               <h3 className="font-extrabold text-sm flex items-center space-x-1.5 text-[#E0FAEB]">

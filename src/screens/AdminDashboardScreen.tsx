@@ -2749,8 +2749,16 @@ send_bank_alert("MB: TK 0909120918 +100,000VND. ND: GIGME 0909120918")`,
 
       {/* Manual Assign Deposit Modal */}
       {assignModalTx && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
-          <div className="w-full max-w-md rounded-3xl bg-[#09111D] border border-amber-500/40 shadow-2xl p-6 text-white space-y-4">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setAssignModalTx(null);
+          }}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md rounded-3xl bg-[#09111D] border border-amber-500/40 shadow-2xl p-6 text-white space-y-4"
+          >
             <div className="flex items-center justify-between pb-3 border-b border-[#C5E5EC]/15">
               <div className="flex items-center space-x-2">
                 <AlertTriangle className="w-5 h-5 text-amber-400" />
@@ -2817,8 +2825,16 @@ send_bank_alert("MB: TK 0909120918 +100,000VND. ND: GIGME 0909120918")`,
 
       {/* User Detail Modal */}
       {selectedUserForModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
-          <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl bg-[#09111D] border border-[#C5E5EC]/30 shadow-2xl p-6 text-white space-y-5">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setSelectedUserForModal(null);
+          }}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl bg-[#09111D] border border-[#C5E5EC]/30 shadow-2xl p-6 text-white space-y-5"
+          >
             {/* Header */}
             {(() => {
               const isModalRootAdmin = selectedUserForModal.id === '000000000';
@@ -3098,8 +3114,16 @@ send_bank_alert("MB: TK 0909120918 +100,000VND. ND: GIGME 0909120918")`,
 
       {/* Delete Single User Confirmation Modal */}
       {userToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
-          <div className="w-full max-w-md rounded-3xl bg-[#09111D] border border-rose-500/50 shadow-2xl p-6 text-white space-y-4">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !isDeletingUser) setUserToDelete(null);
+          }}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md rounded-3xl bg-[#09111D] border border-rose-500/50 shadow-2xl p-6 text-white space-y-4"
+          >
             <div className="w-12 h-12 rounded-2xl bg-rose-950/80 border border-rose-500/50 flex items-center justify-center text-rose-400 mx-auto">
               <Trash2 className="w-6 h-6" />
             </div>
@@ -3169,8 +3193,16 @@ send_bank_alert("MB: TK 0909120918 +100,000VND. ND: GIGME 0909120918")`,
 
       {/* Mass Purge All Non-Admin Users Confirmation Modal */}
       {showPurgeConfirmModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in">
-          <div className="w-full max-w-lg rounded-3xl bg-[#09111D] border-2 border-rose-500 shadow-2xl shadow-rose-950/60 p-6 text-white space-y-4">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !isPurging) setShowPurgeConfirmModal(false);
+          }}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-lg rounded-3xl bg-[#09111D] border-2 border-rose-500 shadow-2xl shadow-rose-950/60 p-6 text-white space-y-4"
+          >
             <div className="w-14 h-14 rounded-2xl bg-rose-950/90 border border-rose-500 flex items-center justify-center text-rose-400 mx-auto animate-bounce">
               <AlertOctagon className="w-7 h-7" />
             </div>
@@ -3235,8 +3267,16 @@ send_bank_alert("MB: TK 0909120918 +100,000VND. ND: GIGME 0909120918")`,
 
       {/* QUICK VIETQR TRANSFER MODAL FOR ADMIN */}
       {selectedWithdrawalForQr && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-fade-in">
-          <div className="w-full max-w-sm rounded-3xl bg-[#0B1528] border-2 border-cyan-500/40 p-6 text-white shadow-2xl space-y-4">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setSelectedWithdrawalForQr(null);
+          }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-fade-in"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-sm rounded-3xl bg-[#0B1528] border-2 border-cyan-500/40 p-6 text-white shadow-2xl space-y-4"
+          >
             <div className="flex justify-between items-center pb-2 border-b border-slate-800">
               <div className="flex items-center space-x-2">
                 <div className="p-2 rounded-xl bg-cyan-500/20 text-cyan-300">
@@ -3315,8 +3355,16 @@ send_bank_alert("MB: TK 0909120918 +100,000VND. ND: GIGME 0909120918")`,
 
       {/* REJECT WITHDRAWAL REASON MODAL */}
       {rejectingTxId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-fade-in">
-          <div className="w-full max-w-sm rounded-3xl bg-[#0B1528] border-2 border-rose-500/40 p-6 text-white shadow-2xl space-y-4">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setRejectingTxId(null);
+          }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-fade-in"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-sm rounded-3xl bg-[#0B1528] border-2 border-rose-500/40 p-6 text-white shadow-2xl space-y-4"
+          >
             <div className="flex items-center space-x-2 text-rose-400 font-bold text-sm">
               <AlertTriangle className="w-5 h-5" />
               <span>Từ Chối & Hoàn Tiền Vào Ví</span>

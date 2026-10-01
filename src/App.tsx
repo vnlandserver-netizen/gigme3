@@ -64,6 +64,9 @@ const GeminiVisionStudentIdModal = lazy(() =>
 const BlockchainProofModal = lazy(() =>
   import('./components/BlockchainProofModal').then((m) => ({ default: m.BlockchainProofModal }))
 );
+const CampusLawScreen = lazy(() =>
+  import('./screens/CampusLawScreen').then((m) => ({ default: m.CampusLawScreen }))
+);
 
 // High-performance smooth loading skeleton for lazy loaded tab screens
 const ScreenLoadingSpinner: React.FC<{ label?: string }> = ({ label = 'Đang tải dữ liệu...' }) => (
@@ -264,6 +267,13 @@ const MainLayout: React.FC = () => {
         );
       case 'CHAT':
         return <ChatSupportScreen onBack={() => setCurrentTab('HOME')} />;
+      case 'LAW':
+        return (
+          <CampusLawScreen
+            onBack={() => setCurrentTab('HOME')}
+            onOpenContactAdmin={() => setCurrentTab('CHAT')}
+          />
+        );
       default:
         return (
           <HomeScreen

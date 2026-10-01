@@ -1,5 +1,5 @@
 import React from 'react';
-import { Radar, Wallet, UserCheck, PlusCircle, MessageSquare, BookOpen } from 'lucide-react';
+import { Radar, Wallet, UserCheck, PlusCircle, MessageSquare, BookOpen, Scale } from 'lucide-react';
 import { useGigMe } from '../context/GigMeContext';
 import { triggerHaptic } from '../utils/haptics';
 
@@ -10,7 +10,8 @@ export type TabScreen =
   | 'PROFILE'
   | 'CHAT'
   | 'ADMIN'
-  | 'MARKETPLACE';
+  | 'MARKETPLACE'
+  | 'LAW';
 
 interface BottomNavProps {
   currentTab: TabScreen;
@@ -132,6 +133,21 @@ export const BottomNav: React.FC<BottomNavProps> = ({ currentTab, onSelectTab })
         >
           <UserCheck className="w-4 h-4 sm:w-5 sm:h-5" />
           <span className="text-[10px] font-bold mt-0.5 truncate max-w-full">Hồ Sơ</span>
+        </button>
+
+        {/* Tab 7: Luật & Điều Khoản Chặt Chẽ (Kế bên Hồ Sơ) */}
+        <button
+          id="nav-law-btn"
+          onClick={() => handleTabClick('LAW')}
+          className={`flex-1 min-w-0 flex flex-col items-center py-1 px-1 rounded-xl transition cursor-pointer ${
+            currentTab === 'LAW'
+              ? 'text-[#3064AE] dark:text-[#E0FAEB] bg-[#3064AE]/10 dark:bg-[#3064AE]/35 font-black border border-[#3064AE]/30 dark:border-[#C5E5EC]/30 shadow-xs'
+              : 'text-slate-500 hover:text-slate-900 dark:text-[#C5E5EC]/70 dark:hover:text-white'
+          }`}
+          title="Bộ Luật & Điều Khoản Chặt Chẽ GigMe"
+        >
+          <Scale className="w-4 h-4 sm:w-5 sm:h-5" />
+          <span className="text-[10px] font-bold mt-0.5 truncate max-w-full">Luật</span>
         </button>
       </div>
     </nav>

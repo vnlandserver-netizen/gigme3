@@ -34,7 +34,7 @@ export const VietQrOpenApiAutoScanner: React.FC<VietQrOpenApiAutoScannerProps> =
   const { currentUser, depositVietQr, showNotification, checkDepositEligibility } = useGigMe();
   const [amount, setAmount] = useState(defaultAmount);
   const [selectedBank, setSelectedBank] = useState(VIETNAMESE_BANKS[2]); // Techcombank
-  const [copied, setCopied] = useState(false);
+  const [copiedField, setCopiedField] = useState<'account' | 'syntax' | null>(null);
   const [isListening, setIsListening] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
   const [transactionSuccess, setTransactionSuccess] = useState(false);
@@ -95,11 +95,16 @@ export const VietQrOpenApiAutoScanner: React.FC<VietQrOpenApiAutoScannerProps> =
 
   if (!isOpen) return null;
 
-  const handleCopy = (text: string) => {
+  const handleCopy = (text: string, field: 'account' | 'syntax') => {
     triggerHaptic('light');
     navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setCopiedField(field);
+    showNotification(
+      'Đã sao chép! 📋',
+      field === 'account' ? `Đã sao chép số tài khoản ${text}.` : `Đã sao chép nội dung "${text}".`,
+      false
+    );
+    setTimeout(() => setCopiedField(null), 2500);
   };
 
   // Real Open API webhook execution to Cloud Server (Casso / SePAY / VietQR API)
@@ -365,11 +370,12 @@ export const VietQrOpenApiAutoScanner: React.FC<VietQrOpenApiAutoScannerProps> =
                   <div className="flex items-center space-x-1">
                     <span className="font-mono font-black text-white">{accountNumber}</span>
                     <button
-                      onClick={() => handleCopy(accountNumber)}
-                      className="p-1 text-[#00E5FF] hover:text-white"
-                      title="Sao chép"
+                      type="button"
+                      onClick={() => handleCopy(accountNumber, 'account')}
+                      className="p-1 text-[#00E5FF] hover:text-white transition cursor-pointer"
+                      title="Sao chép số tài khoản"
                     >
-                      <Copy className="w-3.5 h-3.5" />
+                      {copiedField === 'account' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
                     </button>
                   </div>
                 </div>
@@ -381,11 +387,12 @@ export const VietQrOpenApiAutoScanner: React.FC<VietQrOpenApiAutoScannerProps> =
                       {transferSyntax}
                     </span>
                     <button
-                      onClick={() => handleCopy(transferSyntax)}
-                      className="p-1 text-amber-400 hover:text-white"
+                      type="button"
+                      onClick={() => handleCopy(transferSyntax, 'syntax')}
+                      className="p-1 text-amber-400 hover:text-white transition cursor-pointer"
                       title="Sao chép cú pháp"
                     >
-                      {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                      {copiedField === 'syntax' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
                     </button>
                   </div>
                 </div>
